@@ -1,0 +1,440 @@
+/* main.css — GIS Engine Frontend Styles
+   Aesthetic: technical / precision instrument — dark grid, sharp type, monospace accents
+   Font: JetBrains Mono for UI chrome, DM Sans for readable labels
+*/
+
+@import url('https://fonts.googleapis.com/css2?family=JetBrains+Mono:wght@300;400;500&family=DM+Sans:wght@300;400;500&display=swap');
+
+/* ─── Reset & Base ─────────────────────────────────────────── */
+
+*, *::before, *::after { box-sizing: border-box; margin: 0; padding: 0; }
+
+:root {
+  --bg:           #0d0f12;
+  --bg-panel:     #13161b;
+  --bg-hover:     #1c2028;
+  --border:       #252930;
+  --border-light: #2e333d;
+  --accent:       #4f8ef7;
+  --accent-dim:   rgba(79, 142, 247, 0.15);
+  --accent-glow:  rgba(79, 142, 247, 0.35);
+  --green:        #3ecf8e;
+  --red:          #f55f5f;
+  --amber:        #f5a623;
+  --text-pri:     #e8eaf0;
+  --text-sec:     #7a8394;
+  --text-dim:     #454d5c;
+  --grid-line:    rgba(255,255,255,0.04);
+  --grid-axis:    rgba(255,255,255,0.12);
+  --mono:         'JetBrains Mono', monospace;
+  --sans:         'DM Sans', sans-serif;
+  --panel-w:      240px;
+  --radius:       6px;
+}
+
+html, body {
+  width: 100%; height: 100%;
+  overflow: hidden;
+  background: var(--bg);
+  color: var(--text-pri);
+  font-family: var(--sans);
+  font-size: 13px;
+}
+
+/* ─── Layout Shell ──────────────────────────────────────────── */
+
+#app {
+  display: grid;
+  grid-template-columns: 1fr var(--panel-w);
+  grid-template-rows: 100vh;
+  width: 100vw; height: 100vh;
+}
+
+/* ─── Canvas Area ───────────────────────────────────────────── */
+
+#canvas-wrap {
+  position: relative;
+  overflow: hidden;
+  background: var(--bg);
+}
+
+#canvas {
+  display: block;
+  width: 100%; height: 100%;
+  cursor: crosshair;
+}
+
+/* canvas cursor states */
+#canvas.mode-select   { cursor: default; }
+#canvas.mode-remove   { cursor: not-allowed; }
+#canvas.mode-radius   { cursor: cell; }
+#canvas.mode-knn      { cursor: cell; }
+#canvas.mode-polygon  { cursor: crosshair; }
+
+/* ─── Coords readout (bottom left of canvas) ────────────────── */
+
+#coords-readout {
+  position: absolute;
+  bottom: 14px; left: 16px;
+  font-family: var(--mono);
+  font-size: 11px;
+  color: var(--text-dim);
+  pointer-events: none;
+  letter-spacing: 0.03em;
+}
+
+/* ─── Toast notification ────────────────────────────────────── */
+
+#toast {
+  position: absolute;
+  bottom: 14px;
+  left: 50%;
+  transform: translateX(-50%) translateY(20px);
+  background: var(--bg-panel);
+  border: 1px solid var(--border-light);
+  color: var(--text-pri);
+  font-family: var(--mono);
+  font-size: 11px;
+  padding: 7px 16px;
+  border-radius: 20px;
+  pointer-events: none;
+  opacity: 0;
+  transition: opacity 0.2s, transform 0.2s;
+  white-space: nowrap;
+}
+#toast.show {
+  opacity: 1;
+  transform: translateX(-50%) translateY(0);
+}
+#toast.ok  { border-color: var(--green); color: var(--green); }
+#toast.err { border-color: var(--red);   color: var(--red);   }
+
+/* ─── Right Panel ───────────────────────────────────────────── */
+
+#panel {
+  display: flex;
+  flex-direction: column;
+  background: var(--bg-panel);
+  border-left: 1px solid var(--border);
+  overflow: hidden;
+}
+
+/* ─── Search bar ────────────────────────────────────────────── */
+
+#search-wrap {
+  position: relative;
+  padding: 14px 14px 0;
+}
+
+#search-input {
+  width: 100%;
+  background: var(--bg);
+  border: 1px solid var(--border-light);
+  border-radius: var(--radius);
+  color: var(--text-pri);
+  font-family: var(--mono);
+  font-size: 11px;
+  padding: 8px 10px 8px 32px;
+  outline: none;
+  transition: border-color 0.15s;
+}
+#search-input::placeholder { color: var(--text-dim); }
+#search-input:focus { border-color: var(--accent); }
+
+#search-icon {
+  position: absolute;
+  left: 24px; top: 50%;
+  transform: translateY(-50%);
+  color: var(--text-dim);
+  pointer-events: none;
+  font-size: 13px;
+  margin-top: 7px;
+}
+
+#autocomplete-list {
+  position: absolute;
+  top: calc(100% + 4px);
+  left: 14px; right: 14px;
+  background: var(--bg-panel);
+  border: 1px solid var(--border-light);
+  border-radius: var(--radius);
+  overflow: hidden;
+  z-index: 100;
+  display: none;
+}
+#autocomplete-list.open { display: block; }
+
+.ac-item {
+  padding: 7px 12px;
+  font-family: var(--mono);
+  font-size: 11px;
+  color: var(--text-sec);
+  cursor: pointer;
+  transition: background 0.1s;
+}
+.ac-item:hover, .ac-item.selected {
+  background: var(--bg-hover);
+  color: var(--text-pri);
+}
+.ac-item span { color: var(--accent); }
+
+/* ─── Toolbar ───────────────────────────────────────────────── */
+
+#toolbar {
+  padding: 16px 14px 8px;
+  display: flex;
+  flex-direction: column;
+  gap: 4px;
+}
+
+.toolbar-label {
+  font-family: var(--mono);
+  font-size: 9px;
+  letter-spacing: 0.12em;
+  text-transform: uppercase;
+  color: var(--text-dim);
+  padding: 0 4px;
+  margin-bottom: 4px;
+}
+
+.tool-btn {
+  display: flex;
+  align-items: center;
+  gap: 10px;
+  padding: 9px 10px;
+  border-radius: var(--radius);
+  border: 1px solid transparent;
+  background: transparent;
+  color: var(--text-sec);
+  font-family: var(--sans);
+  font-size: 12px;
+  font-weight: 400;
+  cursor: pointer;
+  transition: background 0.12s, color 0.12s, border-color 0.12s;
+  text-align: left;
+  width: 100%;
+}
+.tool-btn:hover {
+  background: var(--bg-hover);
+  color: var(--text-pri);
+}
+.tool-btn.active {
+  background: var(--accent-dim);
+  border-color: rgba(79,142,247,0.3);
+  color: var(--accent);
+}
+
+.tool-icon {
+  width: 18px; height: 18px;
+  display: flex; align-items: center; justify-content: center;
+  flex-shrink: 0;
+  font-size: 13px;
+  opacity: 0.7;
+}
+.tool-btn.active .tool-icon { opacity: 1; }
+
+/* ─── Divider ───────────────────────────────────────────────── */
+
+.divider {
+  height: 1px;
+  background: var(--border);
+  margin: 8px 14px;
+}
+
+/* ─── Results panel ─────────────────────────────────────────── */
+
+#results {
+  flex: 1;
+  overflow-y: auto;
+  padding: 0 14px 14px;
+  scrollbar-width: thin;
+  scrollbar-color: var(--border) transparent;
+}
+
+#results-title {
+  font-family: var(--mono);
+  font-size: 9px;
+  letter-spacing: 0.12em;
+  text-transform: uppercase;
+  color: var(--text-dim);
+  padding: 10px 4px 8px;
+}
+
+.result-row {
+  display: flex;
+  align-items: baseline;
+  justify-content: space-between;
+  padding: 5px 6px;
+  border-radius: 4px;
+  cursor: pointer;
+  transition: background 0.1s;
+  gap: 8px;
+}
+.result-row:hover { background: var(--bg-hover); }
+.result-row.highlighted { background: var(--accent-dim); }
+
+.result-label {
+  font-family: var(--mono);
+  font-size: 11px;
+  color: var(--text-pri);
+  white-space: nowrap;
+  overflow: hidden;
+  text-overflow: ellipsis;
+  max-width: 110px;
+}
+.result-coords {
+  font-family: var(--mono);
+  font-size: 10px;
+  color: var(--text-dim);
+  white-space: nowrap;
+  flex-shrink: 0;
+}
+
+.result-badge {
+  font-family: var(--mono);
+  font-size: 10px;
+  padding: 1px 6px;
+  border-radius: 3px;
+  flex-shrink: 0;
+}
+.badge-dist { background: rgba(79,142,247,0.12); color: var(--accent); }
+.badge-area { background: rgba(62,207,142,0.12); color: var(--green); }
+.badge-rank { background: rgba(245,166,35,0.12); color: var(--amber); }
+
+.result-empty {
+  font-family: var(--mono);
+  font-size: 11px;
+  color: var(--text-dim);
+  padding: 12px 4px;
+  font-style: italic;
+}
+
+/* ─── Modal overlay ─────────────────────────────────────────── */
+
+#modal-overlay {
+  position: fixed;
+  inset: 0;
+  background: rgba(0,0,0,0.6);
+  display: flex;
+  align-items: center;
+  justify-content: center;
+  z-index: 200;
+  opacity: 0;
+  pointer-events: none;
+  transition: opacity 0.15s;
+}
+#modal-overlay.open {
+  opacity: 1;
+  pointer-events: all;
+}
+
+#modal {
+  background: var(--bg-panel);
+  border: 1px solid var(--border-light);
+  border-radius: 10px;
+  padding: 24px;
+  width: 280px;
+  transform: translateY(8px);
+  transition: transform 0.15s;
+}
+#modal-overlay.open #modal { transform: translateY(0); }
+
+#modal h3 {
+  font-family: var(--mono);
+  font-size: 12px;
+  font-weight: 500;
+  color: var(--text-pri);
+  margin-bottom: 6px;
+  letter-spacing: 0.02em;
+}
+#modal p {
+  font-size: 11px;
+  color: var(--text-sec);
+  margin-bottom: 16px;
+  font-family: var(--mono);
+}
+
+.modal-coord {
+  font-family: var(--mono);
+  font-size: 11px;
+  color: var(--accent);
+  background: var(--accent-dim);
+  padding: 6px 10px;
+  border-radius: 4px;
+  margin-bottom: 14px;
+}
+
+#modal input, #modal select {
+  width: 100%;
+  background: var(--bg);
+  border: 1px solid var(--border-light);
+  border-radius: var(--radius);
+  color: var(--text-pri);
+  font-family: var(--mono);
+  font-size: 12px;
+  padding: 8px 10px;
+  outline: none;
+  margin-bottom: 10px;
+  transition: border-color 0.15s;
+}
+#modal input:focus, #modal select:focus { border-color: var(--accent); }
+#modal input::placeholder { color: var(--text-dim); }
+
+.modal-row {
+  display: flex; gap: 8px;
+}
+
+.btn {
+  flex: 1;
+  padding: 8px;
+  border-radius: var(--radius);
+  border: 1px solid var(--border-light);
+  font-family: var(--mono);
+  font-size: 11px;
+  font-weight: 500;
+  cursor: pointer;
+  transition: background 0.12s, border-color 0.12s;
+}
+.btn-primary {
+  background: var(--accent);
+  border-color: var(--accent);
+  color: #fff;
+}
+.btn-primary:hover { background: #6a9ef8; }
+.btn-ghost {
+  background: transparent;
+  color: var(--text-sec);
+}
+.btn-ghost:hover { background: var(--bg-hover); color: var(--text-pri); }
+
+/* ─── K input inside modal ──────────────────────────────────── */
+
+#knn-k-wrap { margin-bottom: 10px; }
+#knn-k-wrap label {
+  display: block;
+  font-family: var(--mono);
+  font-size: 10px;
+  color: var(--text-sec);
+  margin-bottom: 4px;
+}
+
+/* ─── Polygon mode hint bar ─────────────────────────────────── */
+
+#poly-hint {
+  position: absolute;
+  top: 14px; left: 50%;
+  transform: translateX(-50%);
+  background: var(--bg-panel);
+  border: 1px solid var(--border-light);
+  border-radius: 20px;
+  font-family: var(--mono);
+  font-size: 11px;
+  color: var(--text-sec);
+  padding: 6px 18px;
+  pointer-events: none;
+  opacity: 0;
+  transition: opacity 0.2s;
+  white-space: nowrap;
+}
+#poly-hint.show { opacity: 1; }
+#poly-hint strong { color: var(--text-pri); }

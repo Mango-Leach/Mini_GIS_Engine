@@ -1,0 +1,1271 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+<meta charset="UTF-8">
+<meta name="viewport" content="width=device-width, initial-scale=1.0">
+<title>GIS Engine</title>
+<link rel="preconnect" href="https://fonts.googleapis.com">
+<link href="https://fonts.googleapis.com/css2?family=JetBrains+Mono:wght@300;400;500;600&family=DM+Sans:wght@300;400;500&display=swap" rel="stylesheet">
+<style>
+*, *::before, *::after { box-sizing: border-box; margin: 0; padding: 0; }
+
+:root {
+  --bg:           #0b0d10;
+  --bg-panel:     #111318;
+  --bg-hover:     #191d25;
+  --border:       #1e2229;
+  --border-light: #272c36;
+  --accent:       #4f8ef7;
+  --accent-dim:   rgba(79,142,247,0.13);
+  --green:        #2ed87a;
+  --red:          #f55f5f;
+  --amber:        #f5a623;
+  --purple:       #9b7cff;
+  --text-pri:     #e8eaf0;
+  --text-sec:     #6e7a90;
+  --text-dim:     #3d4455;
+  --mono:         'JetBrains Mono', monospace;
+  --sans:         'DM Sans', sans-serif;
+  --panel-w:      260px;
+}
+
+html, body {
+  width: 100%; height: 100%;
+  overflow: hidden;
+  background: var(--bg);
+  color: var(--text-pri);
+  font-family: var(--sans);
+  font-size: 13px;
+}
+
+/* ── Layout ── */
+#app {
+  display: grid;
+  grid-template-columns: 1fr var(--panel-w);
+  width: 100vw; height: 100vh;
+}
+
+/* ── Canvas wrap ── */
+#canvas-wrap {
+  position: relative;
+  overflow: hidden;
+  background: var(--bg);
+}
+
+canvas {
+  display: block;
+  width: 100%; height: 100%;
+}
+
+/* ── Coords readout ── */
+#coords {
+  position: absolute;
+  bottom: 16px; left: 16px;
+  font-family: var(--mono);
+  font-size: 10px;
+  color: var(--text-dim);
+  pointer-events: none;
+  letter-spacing: 0.05em;
+}
+
+/* ── Toast ── */
+#toast {
+  position: absolute;
+  bottom: 16px; left: 50%;
+  transform: translateX(-50%) translateY(10px);
+  background: var(--bg-panel);
+  border: 1px solid var(--border-light);
+  color: var(--text-pri);
+  font-family: var(--mono);
+  font-size: 11px;
+  padding: 7px 18px;
+  border-radius: 20px;
+  pointer-events: none;
+  opacity: 0;
+  transition: opacity 0.2s, transform 0.2s;
+  white-space: nowrap;
+  z-index: 50;
+}
+#toast.show { opacity: 1; transform: translateX(-50%) translateY(0); }
+#toast.ok   { border-color: var(--green); color: var(--green); }
+#toast.err  { border-color: var(--red);   color: var(--red); }
+
+/* ── Polygon hint ── */
+#poly-hint {
+  position: absolute;
+  top: 16px; left: 50%;
+  transform: translateX(-50%);
+  background: var(--bg-panel);
+  border: 1px solid var(--border-light);
+  font-family: var(--mono);
+  font-size: 11px;
+  color: var(--text-sec);
+  padding: 6px 20px;
+  border-radius: 20px;
+  pointer-events: none;
+  opacity: 0;
+  transition: opacity 0.2s;
+  white-space: nowrap;
+}
+#poly-hint.show { opacity: 1; }
+#poly-hint strong { color: var(--text-pri); }
+
+/* ── RIGHT PANEL ── */
+#panel {
+  display: flex;
+  flex-direction: column;
+  background: var(--bg-panel);
+  border-left: 1px solid var(--border);
+  overflow: hidden;
+}
+
+/* ── Header ── */
+#panel-header {
+  padding: 18px 16px 14px;
+  border-bottom: 1px solid var(--border);
+  flex-shrink: 0;
+}
+
+#panel-title {
+  font-family: var(--mono);
+  font-size: 11px;
+  font-weight: 600;
+  letter-spacing: 0.12em;
+  text-transform: uppercase;
+  color: var(--accent);
+  margin-bottom: 12px;
+}
+
+/* ── Search ── */
+#search-wrap {
+  position: relative;
+}
+
+#search-input {
+  width: 100%;
+  background: var(--bg);
+  border: 1px solid var(--border-light);
+  border-radius: 6px;
+  color: var(--text-pri);
+  font-family: var(--mono);
+  font-size: 11px;
+  padding: 8px 10px 8px 34px;
+  outline: none;
+  transition: border-color 0.15s;
+}
+#search-input::placeholder { color: var(--text-dim); }
+#search-input:focus { border-color: var(--accent); }
+
+#search-icon {
+  position: absolute;
+  left: 10px; top: 50%;
+  transform: translateY(-50%);
+  color: var(--text-dim);
+  pointer-events: none;
+  font-size: 12px;
+}
+
+#autocomplete-list {
+  position: absolute;
+  top: calc(100% + 4px);
+  left: 0; right: 0;
+  background: var(--bg-panel);
+  border: 1px solid var(--border-light);
+  border-radius: 6px;
+  overflow: hidden;
+  z-index: 100;
+  display: none;
+}
+#autocomplete-list.open { display: block; }
+
+.ac-item {
+  padding: 8px 12px;
+  font-family: var(--mono);
+  font-size: 11px;
+  color: var(--text-sec);
+  cursor: pointer;
+  transition: background 0.1s;
+}
+.ac-item:hover { background: var(--bg-hover); color: var(--text-pri); }
+.ac-item .ac-match { color: var(--accent); }
+
+/* ── Toolbar ── */
+#toolbar {
+  padding: 14px 12px 8px;
+  display: flex;
+  flex-direction: column;
+  gap: 3px;
+  flex-shrink: 0;
+  border-bottom: 1px solid var(--border);
+}
+
+.section-label {
+  font-family: var(--mono);
+  font-size: 9px;
+  letter-spacing: 0.14em;
+  text-transform: uppercase;
+  color: var(--text-dim);
+  padding: 0 6px;
+  margin: 6px 0 4px;
+}
+.section-label:first-child { margin-top: 0; }
+
+.tool-btn {
+  display: flex;
+  align-items: center;
+  gap: 10px;
+  padding: 9px 10px;
+  border-radius: 6px;
+  border: 1px solid transparent;
+  background: transparent;
+  color: var(--text-sec);
+  font-family: var(--sans);
+  font-size: 12px;
+  cursor: pointer;
+  transition: all 0.12s;
+  text-align: left;
+  width: 100%;
+}
+.tool-btn:hover { background: var(--bg-hover); color: var(--text-pri); }
+.tool-btn.active {
+  background: var(--accent-dim);
+  border-color: rgba(79,142,247,0.25);
+  color: var(--accent);
+}
+
+.tool-icon {
+  width: 20px; height: 20px;
+  display: flex; align-items: center; justify-content: center;
+  font-size: 14px;
+  flex-shrink: 0;
+}
+
+/* ── Results ── */
+#results-wrap {
+  flex: 1;
+  display: flex;
+  flex-direction: column;
+  overflow: hidden;
+}
+
+#results-header {
+  display: flex;
+  align-items: center;
+  justify-content: space-between;
+  padding: 12px 16px 8px;
+  flex-shrink: 0;
+}
+
+#results-title {
+  font-family: var(--mono);
+  font-size: 9px;
+  letter-spacing: 0.14em;
+  text-transform: uppercase;
+  color: var(--text-dim);
+}
+
+#point-count {
+  font-family: var(--mono);
+  font-size: 9px;
+  color: var(--text-dim);
+  background: var(--bg);
+  padding: 2px 8px;
+  border-radius: 10px;
+  border: 1px solid var(--border);
+}
+
+#results-list {
+  flex: 1;
+  overflow-y: auto;
+  padding: 0 12px 14px;
+  scrollbar-width: thin;
+  scrollbar-color: var(--border) transparent;
+}
+
+.result-row {
+  display: flex;
+  align-items: center;
+  justify-content: space-between;
+  padding: 6px 8px;
+  border-radius: 5px;
+  cursor: pointer;
+  transition: background 0.1s;
+  gap: 8px;
+}
+.result-row:hover { background: var(--bg-hover); }
+.result-row.highlighted {
+  background: var(--accent-dim);
+  border-left: 2px solid var(--accent);
+  padding-left: 6px;
+}
+
+.result-label {
+  font-family: var(--mono);
+  font-size: 11px;
+  color: var(--text-pri);
+  white-space: nowrap;
+  overflow: hidden;
+  text-overflow: ellipsis;
+  max-width: 100px;
+}
+.result-coords {
+  font-family: var(--mono);
+  font-size: 10px;
+  color: var(--text-dim);
+  white-space: nowrap;
+  flex-shrink: 0;
+}
+
+.badge {
+  font-family: var(--mono);
+  font-size: 9px;
+  padding: 2px 6px;
+  border-radius: 3px;
+  flex-shrink: 0;
+  white-space: nowrap;
+}
+.badge-dist { background: rgba(79,142,247,0.15); color: var(--accent); }
+.badge-area { background: rgba(46,216,122,0.15); color: var(--green); }
+.badge-rank { background: rgba(245,166,35,0.15); color: var(--amber); }
+
+.result-empty {
+  font-family: var(--mono);
+  font-size: 11px;
+  color: var(--text-dim);
+  padding: 14px 8px;
+  font-style: italic;
+}
+
+/* ── Modal ── */
+#modal-overlay {
+  position: fixed; inset: 0;
+  background: rgba(0,0,0,0.65);
+  display: flex;
+  align-items: center; justify-content: center;
+  z-index: 200;
+  opacity: 0; pointer-events: none;
+  transition: opacity 0.15s;
+}
+#modal-overlay.open { opacity: 1; pointer-events: all; }
+
+#modal {
+  background: var(--bg-panel);
+  border: 1px solid var(--border-light);
+  border-radius: 10px;
+  padding: 24px;
+  width: 270px;
+  transform: translateY(10px);
+  transition: transform 0.15s;
+}
+#modal-overlay.open #modal { transform: translateY(0); }
+
+#modal h3 {
+  font-family: var(--mono);
+  font-size: 12px;
+  font-weight: 600;
+  color: var(--text-pri);
+  margin-bottom: 4px;
+}
+#modal p {
+  font-size: 11px;
+  color: var(--text-sec);
+  font-family: var(--mono);
+  margin-bottom: 14px;
+}
+.modal-coord {
+  font-family: var(--mono);
+  font-size: 11px;
+  color: var(--accent);
+  background: var(--accent-dim);
+  padding: 6px 10px;
+  border-radius: 4px;
+  margin-bottom: 14px;
+}
+
+#modal input, #modal select {
+  width: 100%;
+  background: var(--bg);
+  border: 1px solid var(--border-light);
+  border-radius: 5px;
+  color: var(--text-pri);
+  font-family: var(--mono);
+  font-size: 12px;
+  padding: 8px 10px;
+  outline: none;
+  margin-bottom: 10px;
+  transition: border-color 0.15s;
+}
+#modal input:focus, #modal select:focus { border-color: var(--accent); }
+#modal input::placeholder { color: var(--text-dim); }
+
+.modal-label {
+  font-family: var(--mono);
+  font-size: 10px;
+  color: var(--text-sec);
+  display: block;
+  margin-bottom: 4px;
+}
+
+.modal-row { display: flex; gap: 8px; margin-top: 4px; }
+
+.btn {
+  flex: 1;
+  padding: 9px;
+  border-radius: 5px;
+  border: 1px solid var(--border-light);
+  font-family: var(--mono);
+  font-size: 11px;
+  font-weight: 500;
+  cursor: pointer;
+  transition: all 0.12s;
+}
+.btn-primary { background: var(--accent); border-color: var(--accent); color: #fff; }
+.btn-primary:hover { background: #6aa3f8; }
+.btn-ghost { background: transparent; color: var(--text-sec); }
+.btn-ghost:hover { background: var(--bg-hover); color: var(--text-pri); }
+.btn-danger { background: rgba(245,95,95,0.15); border-color: rgba(245,95,95,0.3); color: var(--red); }
+.btn-danger:hover { background: rgba(245,95,95,0.25); }
+</style>
+</head>
+<body>
+
+<div id="app">
+  <!-- Canvas -->
+  <div id="canvas-wrap">
+    <canvas id="canvas"></canvas>
+    <div id="coords">x: 0.00  y: 0.00</div>
+    <div id="toast"></div>
+    <div id="poly-hint">Click existing points to build polygon · <strong>Enter</strong> to finish · <strong>Esc</strong> to cancel</div>
+  </div>
+
+  <!-- Right Panel -->
+  <div id="panel">
+    <div id="panel-header">
+      <div id="panel-title">GIS Engine</div>
+      <div id="search-wrap">
+        <span id="search-icon">⌕</span>
+        <input id="search-input" type="text" placeholder="Search label…" autocomplete="off">
+        <div id="autocomplete-list"></div>
+      </div>
+    </div>
+
+    <div id="toolbar">
+      <div class="section-label">Add / Edit</div>
+      <button class="tool-btn active" data-mode="add" title="Click canvas to add a point">
+        <span class="tool-icon">＋</span> Add Point
+      </button>
+      <button class="tool-btn" data-mode="remove" title="Click a point to remove it">
+        <span class="tool-icon">✕</span> Remove Point
+      </button>
+
+      <div class="section-label">Query</div>
+      <button class="tool-btn" data-mode="radius" title="Click canvas to set radius query center">
+        <span class="tool-icon">◎</span> Radius Query
+      </button>
+      <button class="tool-btn" data-mode="knn" title="Click canvas for KNN">
+        <span class="tool-icon">⬡</span> K-Nearest (KNN)
+      </button>
+      <button class="tool-btn" data-mode="distance" title="Click two points for distance">
+        <span class="tool-icon">↔</span> Distance
+      </button>
+      <button class="tool-btn" data-mode="polygon" title="Click points to form a polygon">
+        <span class="tool-icon">⬟</span> Polygon Area
+      </button>
+
+      <div class="section-label">View</div>
+      <button class="tool-btn active" id="btn-quadtree" title="Toggle QuadTree partitions">
+        <span class="tool-icon">⊞</span> QuadTree Lines
+      </button>
+      <button class="tool-btn" id="btn-clear" title="Clear all points">
+        <span class="tool-icon">⊘</span> Clear All
+      </button>
+    </div>
+
+    <div id="results-wrap">
+      <div id="results-header">
+        <span id="results-title">Points</span>
+        <span id="point-count">0 pts</span>
+      </div>
+      <div id="results-list">
+        <div class="result-empty">No points yet. Click the canvas to add one.</div>
+      </div>
+    </div>
+  </div>
+</div>
+
+<!-- Add Point Modal -->
+<div id="modal-overlay">
+  <div id="modal">
+    <h3 id="modal-title">Add Point</h3>
+    <p id="modal-desc">Set a label for this point</p>
+    <div class="modal-coord" id="modal-coord"></div>
+    <div id="modal-body"></div>
+  </div>
+</div>
+
+<script type="module">
+import { GISEngine } from './src/gisengine.js';
+
+// ─── Engine ───────────────────────────────────────────────────
+const engine = new GISEngine();
+
+// ─── Canvas setup ─────────────────────────────────────────────
+const wrap   = document.getElementById('canvas-wrap');
+const canvas = document.getElementById('canvas');
+const ctx    = canvas.getContext('2d');
+
+let W, H;
+const PADDING   = 40;
+const AXIS_COLOR = 'rgba(255,255,255,0.08)';
+const GRID_COLOR = 'rgba(255,255,255,0.03)';
+const POINT_R    = 5;
+
+function resize() {
+  W = canvas.width  = wrap.clientWidth;
+  H = canvas.height = wrap.clientHeight;
+  render();
+}
+window.addEventListener('resize', resize);
+
+// ─── World ↔ Screen ────────────────────────────────────────────
+const WORLD = { min: engine.worldMin, max: engine.worldMax };
+
+function toScreen(wx, wy) {
+  const scaleX = (W - PADDING * 2) / (WORLD.max - WORLD.min);
+  const scaleY = (H - PADDING * 2) / (WORLD.max - WORLD.min);
+  return {
+    x: PADDING + (wx - WORLD.min) * scaleX,
+    y: H - PADDING - (wy - WORLD.min) * scaleY
+  };
+}
+
+function toWorld(sx, sy) {
+  const scaleX = (W - PADDING * 2) / (WORLD.max - WORLD.min);
+  const scaleY = (H - PADDING * 2) / (WORLD.max - WORLD.min);
+  return {
+    x: (sx - PADDING) / scaleX + WORLD.min,
+    y: (H - PADDING - sy) / scaleY + WORLD.min
+  };
+}
+
+// ─── State ────────────────────────────────────────────────────
+let mode            = 'add';
+let highlightLabel  = null;
+let queryResults    = [];
+let radiusCircle    = null;
+let polyPoints      = [];
+let completedPolygon = [];
+let completedArea    = 0;
+let distancePair    = [];
+let distanceLine    = null;
+let knnCenter       = null;
+
+// ─── Render ───────────────────────────────────────────────────
+function render() {
+  ctx.clearRect(0, 0, W, H);
+  drawGrid();
+  if (showQuadTree) drawQuadTree();
+  drawQueryOverlay();
+  drawPolygonPreview();
+  drawPoints();
+}
+
+function drawGrid() {
+  const step = (WORLD.max - WORLD.min) / 20;
+
+  ctx.strokeStyle = GRID_COLOR;
+  ctx.lineWidth   = 1;
+  ctx.setLineDash([]);
+
+  for (let v = WORLD.min; v <= WORLD.max; v += step) {
+    const { x: sx } = toScreen(v, 0);
+    ctx.beginPath();
+    ctx.moveTo(sx, PADDING);
+    ctx.lineTo(sx, H - PADDING);
+    ctx.stroke();
+
+    const { y: sy } = toScreen(0, v);
+    ctx.beginPath();
+    ctx.moveTo(PADDING, sy);
+    ctx.lineTo(W - PADDING, sy);
+    ctx.stroke();
+  }
+
+  // Axes
+  ctx.strokeStyle = AXIS_COLOR;
+  ctx.lineWidth   = 1;
+
+  const { x: ax } = toScreen(0, 0);
+  ctx.beginPath();
+  ctx.moveTo(ax, PADDING - 10);
+  ctx.lineTo(ax, H - PADDING + 10);
+  ctx.stroke();
+
+  const { y: ay } = toScreen(0, 0);
+  ctx.beginPath();
+  ctx.moveTo(PADDING - 10, ay);
+  ctx.lineTo(W - PADDING + 10, ay);
+  ctx.stroke();
+
+  // Axis labels
+  ctx.fillStyle   = 'rgba(255,255,255,0.12)';
+  ctx.font        = '10px JetBrains Mono, monospace';
+  ctx.textAlign   = 'center';
+  ctx.fillText('x', W - PADDING + 18, ay + 4);
+  ctx.textAlign = 'left';
+  ctx.fillText('y', ax + 6, PADDING - 14);
+
+  // Tick labels (every 4th step)
+  ctx.fillStyle = 'rgba(255,255,255,0.18)';
+  ctx.font      = '9px JetBrains Mono, monospace';
+  const bigStep = (WORLD.max - WORLD.min) / 5;
+  for (let v = WORLD.min; v <= WORLD.max; v += bigStep) {
+    if (Math.abs(v) < 0.001) continue;
+    ctx.textAlign = 'center';
+    const { x: sx } = toScreen(v, 0);
+    ctx.fillText(v, sx, ay + 14);
+
+    ctx.textAlign = 'right';
+    const { y: sy } = toScreen(0, v);
+    ctx.fillText(v, ax - 6, sy + 3);
+  }
+}
+
+function drawQuadTree() {
+  const boundaries = engine.getQuadTreeBoundaries();
+  ctx.strokeStyle = 'rgba(79,142,247,0.18)';
+  ctx.lineWidth   = 1;
+  ctx.setLineDash([3, 4]);
+  for (const bb of boundaries) {
+    const tl = toScreen(bb.cx - bb.halfWidth,  bb.cy + bb.halfHeight);
+    const br = toScreen(bb.cx + bb.halfWidth,  bb.cy - bb.halfHeight);
+    ctx.strokeRect(tl.x, tl.y, br.x - tl.x, br.y - tl.y);
+  }
+  ctx.setLineDash([]);
+}
+
+function drawQueryOverlay() {
+  // Radius circle
+  if (radiusCircle) {
+    const sc = toScreen(radiusCircle.cx, radiusCircle.cy);
+    const edge = toScreen(radiusCircle.cx + radiusCircle.r, radiusCircle.cy);
+    const sr   = Math.abs(edge.x - sc.x);
+
+    ctx.beginPath();
+    ctx.arc(sc.x, sc.y, sr, 0, Math.PI * 2);
+    ctx.strokeStyle = 'rgba(46,216,122,0.5)';
+    ctx.lineWidth   = 1.5;
+    ctx.setLineDash([5, 4]);
+    ctx.stroke();
+    ctx.fillStyle = 'rgba(46,216,122,0.06)';
+    ctx.fill();
+    ctx.setLineDash([]);
+
+    // Center dot
+    ctx.beginPath();
+    ctx.arc(sc.x, sc.y, 3, 0, Math.PI * 2);
+    ctx.fillStyle = 'rgba(46,216,122,0.8)';
+    ctx.fill();
+  }
+
+  // KNN center
+  if (knnCenter) {
+    const sc = toScreen(knnCenter.x, knnCenter.y);
+    ctx.beginPath();
+    ctx.arc(sc.x, sc.y, 4, 0, Math.PI * 2);
+    ctx.fillStyle = 'rgba(155,124,255,0.8)';
+    ctx.fill();
+  }
+
+  // Distance line
+  if (distanceLine) {
+    const s1 = toScreen(distanceLine.p1.x, distanceLine.p1.y);
+    const s2 = toScreen(distanceLine.p2.x, distanceLine.p2.y);
+    ctx.beginPath();
+    ctx.moveTo(s1.x, s1.y);
+    ctx.lineTo(s2.x, s2.y);
+    ctx.strokeStyle = 'rgba(79,142,247,0.7)';
+    ctx.lineWidth   = 1.5;
+    ctx.setLineDash([6, 4]);
+    ctx.stroke();
+    ctx.setLineDash([]);
+  }
+}
+
+function drawPolygonPreview() {
+  // Completed (filled) polygon
+  if (completedPolygon.length >= 3) {
+    ctx.beginPath();
+    const f = toScreen(completedPolygon[0].x, completedPolygon[0].y);
+    ctx.moveTo(f.x, f.y);
+    for (let i = 1; i < completedPolygon.length; i++) {
+      const s = toScreen(completedPolygon[i].x, completedPolygon[i].y);
+      ctx.lineTo(s.x, s.y);
+    }
+    ctx.closePath();
+    ctx.fillStyle   = 'rgba(245,166,35,0.15)';
+    ctx.fill();
+    ctx.strokeStyle = 'rgba(245,166,35,0.8)';
+    ctx.lineWidth   = 1.5;
+    ctx.setLineDash([]);
+    ctx.stroke();
+
+    // Vertex dots
+    for (const p of completedPolygon) {
+      const s = toScreen(p.x, p.y);
+      ctx.beginPath();
+      ctx.arc(s.x, s.y, 5, 0, Math.PI * 2);
+      ctx.fillStyle = 'rgba(245,166,35,0.9)';
+      ctx.fill();
+    }
+
+    // Area label at centroid
+    const cx = completedPolygon.reduce((s, p) => s + p.x, 0) / completedPolygon.length;
+    const cy = completedPolygon.reduce((s, p) => s + p.y, 0) / completedPolygon.length;
+    const sc = toScreen(cx, cy);
+    ctx.font      = 'bold 13px JetBrains Mono, monospace';
+    ctx.fillStyle = 'rgba(245,166,35,0.95)';
+    ctx.textAlign = 'center';
+    ctx.fillText(`${completedArea.toFixed(1)} u²`, sc.x, sc.y);
+  }
+
+  // In-progress polygon
+  if (polyPoints.length === 0) return;
+
+  ctx.strokeStyle = 'rgba(245,166,35,0.55)';
+  ctx.lineWidth   = 1.5;
+  ctx.setLineDash([5, 4]);
+  ctx.beginPath();
+  const first = toScreen(polyPoints[0].x, polyPoints[0].y);
+  ctx.moveTo(first.x, first.y);
+  for (let i = 1; i < polyPoints.length; i++) {
+    const s = toScreen(polyPoints[i].x, polyPoints[i].y);
+    ctx.lineTo(s.x, s.y);
+  }
+  ctx.stroke();
+  ctx.setLineDash([]);
+
+  // In-progress vertex dots
+  for (const p of polyPoints) {
+    const s = toScreen(p.x, p.y);
+    ctx.beginPath();
+    ctx.arc(s.x, s.y, 5, 0, Math.PI * 2);
+    ctx.fillStyle = 'rgba(245,166,35,0.7)';
+    ctx.fill();
+    // Ring on first vertex as "close here" indicator
+    if (p === polyPoints[0]) {
+      ctx.beginPath();
+      ctx.arc(s.x, s.y, 9, 0, Math.PI * 2);
+      ctx.strokeStyle = 'rgba(245,166,35,0.5)';
+      ctx.lineWidth = 1;
+      ctx.stroke();
+    }
+  }
+}
+
+function drawPoints() {
+  const all      = engine.getAllPointsSorted();
+  const hitSet   = new Set(queryResults.map(r => r.point ? r.point.label : r.label));
+  const distSet  = new Set(distancePair);
+
+  for (const p of all) {
+    const s         = toScreen(p.x, p.y);
+    const isHL      = p.label === highlightLabel;
+    const isQuery   = hitSet.has(p.label);
+    const isDist    = distSet.has(p.label);
+    const isDistPick = distancePair.length === 1 && distancePair[0] === p.label;
+
+    // Color selection
+    let color = '#4f8ef7';
+    if (isHL)       color = '#fff';
+    if (isQuery)    color = '#2ed87a';
+    if (isDist)     color = '#4f8ef7';
+    if (isDistPick) color = '#9b7cff';
+
+    const r = isHL ? 7 : 5;
+
+    // Glow
+    if (isHL || isQuery || isDist) {
+      ctx.beginPath();
+      ctx.arc(s.x, s.y, r + 5, 0, Math.PI * 2);
+      ctx.fillStyle = color.replace('#', 'rgba(').replace('2ed87a', '46,216,122,0.2)').replace('4f8ef7', '79,142,247,0.2)').replace('fff', '255,255,255,0.15)');
+      if (isQuery)  ctx.fillStyle = 'rgba(46,216,122,0.18)';
+      if (isHL)     ctx.fillStyle = 'rgba(255,255,255,0.12)';
+      if (isDist)   ctx.fillStyle = 'rgba(79,142,247,0.18)';
+      ctx.fill();
+    }
+
+    // Point circle
+    ctx.beginPath();
+    ctx.arc(s.x, s.y, r, 0, Math.PI * 2);
+    ctx.fillStyle = color;
+    ctx.fill();
+
+    // Label
+    ctx.fillStyle   = isHL ? '#fff' : 'rgba(232,234,240,0.75)';
+    ctx.font        = `${isHL ? '500 ' : ''}11px JetBrains Mono, monospace`;
+    ctx.textAlign   = 'left';
+    ctx.fillText(p.label, s.x + r + 5, s.y + 4);
+  }
+}
+
+// ─── Mouse ────────────────────────────────────────────────────
+canvas.addEventListener('mousemove', e => {
+  const rect = canvas.getBoundingClientRect();
+  const wx   = e.clientX - rect.left;
+  const wy   = e.clientY - rect.top;
+  const w    = toWorld(wx, wy);
+  document.getElementById('coords').textContent =
+    `x: ${w.x.toFixed(1).padStart(7)}   y: ${w.y.toFixed(1).padStart(7)}`;
+});
+
+canvas.addEventListener('click', e => {
+  const rect = canvas.getBoundingClientRect();
+  const { x: wx, y: wy } = toWorld(e.clientX - rect.left, e.clientY - rect.top);
+
+  if (mode === 'add') {
+    openAddModal(wx, wy);
+  } else if (mode === 'remove') {
+    const hit = pickPoint(e.clientX - rect.left, e.clientY - rect.top);
+    if (hit) {
+      const r = engine.removePoint(hit.label);
+      if (r.ok) {
+        toast(r.message, 'ok');
+        refreshList();
+        render();
+      }
+    }
+  } else if (mode === 'radius') {
+    openRadiusModal(wx, wy);
+  } else if (mode === 'knn') {
+    openKNNModal(wx, wy);
+  } else if (mode === 'distance') {
+    const hit = pickPoint(e.clientX - rect.left, e.clientY - rect.top);
+    if (hit) {
+      distancePair.push(hit.label);
+      if (distancePair.length === 2) {
+        const r = engine.getDistance(distancePair[0], distancePair[1]);
+        if (r.ok) {
+          distanceLine = { p1: r.p1, p2: r.p2 };
+          showDistanceResults(r);
+          render();
+        }
+        distancePair = [];
+      } else {
+        toast(`Pick second point for distance`, 'ok');
+        render();
+      }
+    }
+  } else if (mode === 'polygon') {
+    const hit = pickPoint(e.clientX - rect.left, e.clientY - rect.top, 18);
+    if (hit) {
+      const last = polyPoints[polyPoints.length - 1];
+      if (!last || last.label !== hit.label) {
+        polyPoints.push(hit);
+        toast(`${hit.label} added (${polyPoints.length} pts) · Enter to finish`, 'ok');
+      }
+    } else {
+      toast('Click an existing point to build the polygon', 'err');
+    }
+    render();
+  }
+});
+
+// Pick nearest point to screen coords
+function pickPoint(sx, sy, threshold = 14) {
+  const all = engine.getAllPointsSorted();
+  let best = null, bestD = Infinity;
+  for (const p of all) {
+    const s = toScreen(p.x, p.y);
+    const d = Math.hypot(s.x - sx, s.y - sy);
+    if (d < threshold && d < bestD) { best = p; bestD = d; }
+  }
+  return best;
+}
+
+// ─── Keyboard ─────────────────────────────────────────────────
+window.addEventListener('keydown', e => {
+  if (mode === 'polygon') {
+    if (e.key === 'Enter') finishPolygon();
+    if (e.key === 'Escape') { polyPoints = []; completedPolygon = []; completedArea = 0; render(); hidePoly(); }
+  }
+  if (e.key === 'Escape' && !document.getElementById('modal-overlay').classList.contains('open')) {
+    clearQuery();
+  }
+});
+
+function finishPolygon() {
+  if (polyPoints.length < 3) { toast('Need at least 3 points', 'err'); return; }
+  const labels = polyPoints.map(p => p.label);
+  const r = engine.calculateArea(labels);
+  if (r.ok) {
+    // Keep the polygon drawn as a filled overlay
+    completedPolygon = polyPoints.slice();
+    completedArea    = r.area;
+    showAreaResults(r);
+    render();
+  } else {
+    toast(r.message, 'err');
+  }
+  polyPoints = [];
+  hidePoly();
+}
+
+function hidePoly() {
+  document.getElementById('poly-hint').classList.remove('show');
+  render();
+}
+
+// ─── Modes ────────────────────────────────────────────────────
+document.querySelectorAll('[data-mode]').forEach(btn => {
+  btn.addEventListener('click', () => {
+    mode = btn.dataset.mode;
+    document.querySelectorAll('[data-mode]').forEach(b => b.classList.remove('active'));
+    btn.classList.add('active');
+    clearQuery();
+    if (mode === 'polygon') {
+      document.getElementById('poly-hint').classList.add('show');
+    } else {
+      hidePoly();
+    }
+    canvas.style.cursor = {
+      add: 'crosshair', remove: 'not-allowed',
+      radius: 'cell', knn: 'cell',
+      distance: 'pointer', polygon: 'crosshair'
+    }[mode] || 'default';
+  });
+});
+
+let showQuadTree = true;
+document.getElementById('btn-quadtree').addEventListener('click', () => {
+  showQuadTree = !showQuadTree;
+  document.getElementById('btn-quadtree').classList.toggle('active', showQuadTree);
+  render();
+});
+
+document.getElementById('btn-clear').addEventListener('click', () => {
+  const all = engine.getAllPointsSorted();
+  for (const p of [...all]) engine.removePoint(p.label);
+  clearQuery();
+  refreshList();
+  render();
+  toast('Cleared all points', 'ok');
+});
+
+function clearQuery() {
+  queryResults     = [];
+  radiusCircle     = null;
+  knnCenter        = null;
+  distanceLine     = null;
+  distancePair     = [];
+  completedPolygon = [];
+  completedArea    = 0;
+  highlightLabel   = null;
+  refreshList();
+  render();
+}
+
+// ─── Modal ─────────────────────────────────────────────────────
+let _pendingX, _pendingY;
+
+function openAddModal(wx, wy) {
+  _pendingX = wx; _pendingY = wy;
+  document.getElementById('modal-title').textContent = 'Add Point';
+  document.getElementById('modal-desc').textContent  = 'Enter a label for this point';
+  document.getElementById('modal-coord').textContent = `x: ${wx.toFixed(2)},  y: ${wy.toFixed(2)}`;
+  document.getElementById('modal-body').innerHTML = `
+    <input id="modal-label" type="text" placeholder="Label (e.g. A, Station1…)" maxlength="20">
+    <div class="modal-row">
+      <button class="btn btn-ghost" id="modal-cancel">Cancel</button>
+      <button class="btn btn-primary" id="modal-confirm">Add</button>
+    </div>`;
+
+  openModal();
+  setTimeout(() => document.getElementById('modal-label')?.focus(), 50);
+
+  document.getElementById('modal-confirm').addEventListener('click', confirmAdd);
+  document.getElementById('modal-cancel').addEventListener('click', closeModal);
+  document.getElementById('modal-label').addEventListener('keydown', e => {
+    if (e.key === 'Enter') confirmAdd();
+    if (e.key === 'Escape') closeModal();
+  });
+}
+
+function confirmAdd() {
+  const label = document.getElementById('modal-label')?.value.trim();
+  if (!label) { toast('Label cannot be empty', 'err'); return; }
+  const r = engine.addPoint(_pendingX, _pendingY, label);
+  closeModal();
+  toast(r.message, r.ok ? 'ok' : 'err');
+  if (r.ok) { refreshList(); render(); }
+}
+
+function openRadiusModal(wx, wy) {
+  document.getElementById('modal-title').textContent = 'Radius Query';
+  document.getElementById('modal-desc').textContent  = 'Find all points within radius';
+  document.getElementById('modal-coord').textContent = `center: (${wx.toFixed(1)}, ${wy.toFixed(1)})`;
+  document.getElementById('modal-body').innerHTML = `
+    <label class="modal-label">Radius</label>
+    <input id="modal-radius" type="number" placeholder="e.g. 200" min="1" max="2000" value="200">
+    <div class="modal-row">
+      <button class="btn btn-ghost" id="modal-cancel">Cancel</button>
+      <button class="btn btn-primary" id="modal-confirm">Query</button>
+    </div>`;
+
+  openModal();
+  setTimeout(() => document.getElementById('modal-radius')?.focus(), 50);
+
+  const go = () => {
+    const r = parseFloat(document.getElementById('modal-radius').value);
+    if (isNaN(r) || r <= 0) { toast('Enter a positive radius', 'err'); return; }
+    const res = engine.queryRadius(wx, wy, r);
+    closeModal();
+    if (!res.ok) { toast(res.message, 'err'); return; }
+    radiusCircle   = { cx: wx, cy: wy, r };
+    queryResults   = res.points;
+    knnCenter      = null;
+    distanceLine   = null;
+    showRadiusResults(res.points, r);
+    render();
+  };
+
+  document.getElementById('modal-confirm').addEventListener('click', go);
+  document.getElementById('modal-cancel').addEventListener('click', closeModal);
+  document.getElementById('modal-radius').addEventListener('keydown', e => {
+    if (e.key === 'Enter') go();
+    if (e.key === 'Escape') closeModal();
+  });
+}
+
+function openKNNModal(wx, wy) {
+  document.getElementById('modal-title').textContent = 'K-Nearest Neighbors';
+  document.getElementById('modal-desc').textContent  = 'Find K closest points';
+  document.getElementById('modal-coord').textContent = `query: (${wx.toFixed(1)}, ${wy.toFixed(1)})`;
+  document.getElementById('modal-body').innerHTML = `
+    <label class="modal-label">K (number of neighbors)</label>
+    <input id="modal-k" type="number" placeholder="e.g. 3" min="1" max="50" value="3">
+    <div class="modal-row">
+      <button class="btn btn-ghost" id="modal-cancel">Cancel</button>
+      <button class="btn btn-primary" id="modal-confirm">Find</button>
+    </div>`;
+
+  openModal();
+  setTimeout(() => document.getElementById('modal-k')?.focus(), 50);
+
+  const go = () => {
+    const k = parseInt(document.getElementById('modal-k').value);
+    if (isNaN(k) || k <= 0) { toast('Enter a positive K', 'err'); return; }
+    const res = engine.queryKNN(wx, wy, k);
+    closeModal();
+    if (!res.ok) { toast(res.message, 'err'); return; }
+    knnCenter    = { x: wx, y: wy };
+    radiusCircle = null;
+    queryResults = res.neighbors.map(n => ({ point: n.point, distance: n.distance }));
+    distanceLine = null;
+    showKNNResults(res.neighbors);
+    render();
+  };
+
+  document.getElementById('modal-confirm').addEventListener('click', go);
+  document.getElementById('modal-cancel').addEventListener('click', closeModal);
+  document.getElementById('modal-k').addEventListener('keydown', e => {
+    if (e.key === 'Enter') go();
+    if (e.key === 'Escape') closeModal();
+  });
+}
+
+function openModal()  { document.getElementById('modal-overlay').classList.add('open'); }
+function closeModal() { document.getElementById('modal-overlay').classList.remove('open'); }
+document.getElementById('modal-overlay').addEventListener('click', e => {
+  if (e.target === document.getElementById('modal-overlay')) closeModal();
+});
+
+// ─── Results panel ─────────────────────────────────────────────
+function refreshList() {
+  const all   = engine.getAllPointsSorted();
+  const list  = document.getElementById('results-list');
+  const count = document.getElementById('point-count');
+
+  count.textContent = `${all.length} pt${all.length !== 1 ? 's' : ''}`;
+
+  if (all.length === 0) {
+    list.innerHTML = '<div class="result-empty">No points yet. Click the canvas to add one.</div>';
+    return;
+  }
+
+  list.innerHTML = all.map(p => `
+    <div class="result-row ${highlightLabel === p.label ? 'highlighted' : ''}"
+         data-label="${p.label}">
+      <span class="result-label">${p.label}</span>
+      <span class="result-coords">${p.x.toFixed(0)}, ${p.y.toFixed(0)}</span>
+    </div>`).join('');
+
+  list.querySelectorAll('.result-row').forEach(row => {
+    row.addEventListener('click', () => {
+      const lbl = row.dataset.label;
+      highlightLabel = highlightLabel === lbl ? null : lbl;
+      if (highlightLabel) {
+        const p = engine.searchLabel(highlightLabel);
+        if (p) panTo(p);
+      }
+      refreshList(); render();
+    });
+  });
+}
+
+function panTo(p) {
+  // Just re-render; no panning needed (world fits in view)
+  render();
+}
+
+function showRadiusResults(pts, r) {
+  const list  = document.getElementById('results-list');
+  const count = document.getElementById('point-count');
+  const title = document.getElementById('results-title');
+  title.textContent = `Radius (r=${r})`;
+  count.textContent = `${pts.length} found`;
+
+  if (pts.length === 0) {
+    list.innerHTML = '<div class="result-empty">No points in radius.</div>';
+    return;
+  }
+  list.innerHTML = pts.map((entry, i) => `
+    <div class="result-row" data-label="${entry.point.label}">
+      <span class="result-label">${entry.point.label}</span>
+      <span class="badge badge-dist">${entry.distance.toFixed(1)}</span>
+    </div>`).join('');
+
+  attachRowClicks();
+}
+
+function showKNNResults(neighbors) {
+  const list  = document.getElementById('results-list');
+  const count = document.getElementById('point-count');
+  const title = document.getElementById('results-title');
+  title.textContent = 'K-Nearest';
+  count.textContent = `${neighbors.length} found`;
+
+  list.innerHTML = neighbors.map((n, i) => `
+    <div class="result-row" data-label="${n.point.label}">
+      <span class="result-label">${n.point.label}</span>
+      <span class="badge badge-rank">#${i+1} · ${n.distance.toFixed(1)}</span>
+    </div>`).join('');
+
+  attachRowClicks();
+}
+
+function showDistanceResults(r) {
+  const list  = document.getElementById('results-list');
+  const count = document.getElementById('point-count');
+  const title = document.getElementById('results-title');
+  title.textContent = 'Distance';
+  count.textContent = '2 pts';
+
+  list.innerHTML = `
+    <div class="result-row highlighted" data-label="${r.p1.label}">
+      <span class="result-label">${r.p1.label}</span>
+      <span class="result-coords">${r.p1.x.toFixed(0)}, ${r.p1.y.toFixed(0)}</span>
+    </div>
+    <div class="result-row highlighted" data-label="${r.p2.label}">
+      <span class="result-label">${r.p2.label}</span>
+      <span class="result-coords">${r.p2.x.toFixed(0)}, ${r.p2.y.toFixed(0)}</span>
+    </div>
+    <div style="padding:10px 8px; font-family:var(--mono); font-size:11px;">
+      <div style="color:var(--text-sec); margin-bottom:6px;">
+        Euclidean: <span style="color:var(--accent)">${r.euclidean.toFixed(2)}</span>
+      </div>
+      <div style="color:var(--text-sec)">
+        Manhattan: <span style="color:var(--amber)">${r.manhattan.toFixed(2)}</span>
+      </div>
+    </div>`;
+
+  attachRowClicks();
+}
+
+function showAreaResults(r) {
+  const list  = document.getElementById('results-list');
+  const count = document.getElementById('point-count');
+  const title = document.getElementById('results-title');
+  title.textContent = 'Polygon Area';
+  count.textContent = `${r.vertices.length} verts`;
+
+  list.innerHTML = `
+    <div style="padding:10px 8px; font-family:var(--mono); font-size:11px; color:var(--text-sec);">
+      Area: <span style="color:var(--green); font-size:16px; font-weight:600;">${r.area.toFixed(2)}</span> units²
+    </div>
+    ${r.vertices.map(p => `
+    <div class="result-row highlighted">
+      <span class="result-label">${p.label}</span>
+      <span class="result-coords">${p.x.toFixed(0)}, ${p.y.toFixed(0)}</span>
+    </div>`).join('')}`;
+}
+
+function attachRowClicks() {
+  document.querySelectorAll('.result-row[data-label]').forEach(row => {
+    row.addEventListener('click', () => {
+      const lbl = row.dataset.label;
+      highlightLabel = highlightLabel === lbl ? null : lbl;
+      render();
+    });
+  });
+}
+
+// ─── Search / Autocomplete ─────────────────────────────────────
+const searchInput = document.getElementById('search-input');
+const acList      = document.getElementById('autocomplete-list');
+
+searchInput.addEventListener('input', () => {
+  const val = searchInput.value.trim();
+  if (!val) { acList.classList.remove('open'); highlightLabel = null; render(); return; }
+
+  const results = engine.autocomplete(val);
+  if (results.length === 0) { acList.classList.remove('open'); return; }
+
+  acList.innerHTML = results.slice(0, 8).map(p =>
+    `<div class="ac-item" data-label="${p.label}">
+       <span class="ac-match">${p.label.slice(0, val.length)}</span>${p.label.slice(val.length)}
+       <span style="color:var(--text-dim); float:right;">(${p.x.toFixed(0)}, ${p.y.toFixed(0)})</span>
+     </div>`).join('');
+
+  acList.classList.add('open');
+
+  acList.querySelectorAll('.ac-item').forEach(item => {
+    item.addEventListener('click', () => {
+      const lbl = item.dataset.label;
+      searchInput.value = lbl;
+      highlightLabel    = lbl;
+      acList.classList.remove('open');
+      refreshList();
+      render();
+    });
+  });
+});
+
+document.addEventListener('click', e => {
+  if (!e.target.closest('#search-wrap')) acList.classList.remove('open');
+});
+
+// ─── Toast ────────────────────────────────────────────────────
+let _toastTimer;
+function toast(msg, type = 'ok') {
+  const t = document.getElementById('toast');
+  t.textContent = msg;
+  t.className   = `show ${type}`;
+  clearTimeout(_toastTimer);
+  _toastTimer = setTimeout(() => { t.className = ''; }, 2500);
+}
+
+// ─── Init ─────────────────────────────────────────────────────
+resize();
+
+// Add a few sample points
+const samples = [
+  [100, 200, 'Alpha'], [-300, 150, 'Beta'], [200, -100, 'Gamma'],
+  [-150, -250, 'Delta'], [50, 50, 'Epsilon']
+];
+for (const [x, y, l] of samples) engine.addPoint(x, y, l);
+refreshList();
+render();
+</script>
+</body>
+</html>
