@@ -1,10 +1,5 @@
-// QuadTree.js — translated from QuadTree.h / QuadTree.cpp
-// Recursive 2D spatial index. Each node covers an AABB region and holds
-// up to `capacity` points before subdividing into NW/NE/SW/SE children.
-
 import { Distance } from './distance.js';
 
-// Axis-Aligned Bounding Box
 export class AABB {
     constructor(cx, cy, halfWidth, halfHeight) {
         this.cx         = cx;
@@ -40,8 +35,6 @@ export class QuadTree {
         this.SE = null;
     }
 
-    // --- Subdivide ---
-
     _subdivide() {
         const { cx, cy, halfWidth, halfHeight } = this.boundary;
         const hw = halfWidth  / 2;
@@ -54,8 +47,6 @@ export class QuadTree {
 
         this.divided = true;
     }
-
-    // --- Insert ---
 
     insert(point) {
         if (!this.boundary.contains(point)) return false;
@@ -73,8 +64,6 @@ export class QuadTree {
                this.SE.insert(point);
     }
 
-    // --- Range Query (rectangular AABB) ---
-
     queryRange(range, found = []) {
         if (!this.boundary.intersects(range)) return found;
 
@@ -91,8 +80,6 @@ export class QuadTree {
 
         return found;
     }
-
-    // --- Radius Query ---
 
     queryRadius(center, radius, found = []) {
         const rangeBB = new AABB(center.x, center.y, radius, radius);
@@ -112,8 +99,6 @@ export class QuadTree {
         return found;
     }
 
-    // --- Get all points ---
-
     getAllPoints(allPoints = []) {
         for (const p of this.points) allPoints.push(p);
 
@@ -127,8 +112,6 @@ export class QuadTree {
         return allPoints;
     }
 
-    // --- Count ---
-
     size() {
         let count = this.points.length;
         if (this.divided) {
@@ -137,8 +120,6 @@ export class QuadTree {
         }
         return count;
     }
-
-    // --- Collect all AABB boundaries (for rendering partition lines) ---
 
     getBoundaries(result = []) {
         result.push(this.boundary);

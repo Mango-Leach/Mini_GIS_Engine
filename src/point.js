@@ -1,6 +1,3 @@
-// Point.js — translated from Point.h
-// Represents a 2D geographic point with a label
-
 export class Point {
     constructor(x = 0, y = 0, label = '') {
         this.x = x;
@@ -8,13 +5,11 @@ export class Point {
         this.label = label;
     }
 
-    // Equality check (coordinates only, ignores label)
     equals(other) {
         return Math.abs(this.x - other.x) < 1e-9 &&
                Math.abs(this.y - other.y) < 1e-9;
     }
 
-    // Compare by x, then y as tiebreaker (used by AVL Tree)
     lessThan(other) {
         if (Math.abs(this.x - other.x) < 1e-9) return this.y < other.y;
         return this.x < other.x;

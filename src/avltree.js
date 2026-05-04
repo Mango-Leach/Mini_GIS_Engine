@@ -1,7 +1,3 @@
-// AVLTree.js — translated from AVLTree.h / AVLTree.cpp
-// Self-balancing BST storing Points sorted by x-coordinate (y as tiebreaker)
-// Supports: insert, remove by label, inorder traversal, 1D x-range search, find by label
-
 class AVLNode {
     constructor(point) {
         this.data   = point;
@@ -16,8 +12,6 @@ export class AVLTree {
         this.root = null;
     }
 
-    // --- Height & Balance ---
-
     _height(node) {
         return node ? node.height : 0;
     }
@@ -31,8 +25,6 @@ export class AVLTree {
             node.height = 1 + Math.max(this._height(node.left), this._height(node.right));
         }
     }
-
-    // --- Rotations ---
 
     _rotateRight(y) {
         const x = y.left;
@@ -75,8 +67,6 @@ export class AVLTree {
         return node;
     }
 
-    // --- Insert ---
-
     _insert(node, point) {
         if (!node) return new AVLNode(point);
 
@@ -85,7 +75,6 @@ export class AVLTree {
         } else if (point.greaterThan(node.data)) {
             node.right = this._insert(node.right, point);
         } else {
-            // Duplicate coordinates — update label
             node.data.label = point.label;
             return node;
         }
@@ -96,8 +85,6 @@ export class AVLTree {
     insert(point) {
         this.root = this._insert(this.root, point);
     }
-
-    // --- Remove by label ---
 
     _findMin(node) {
         while (node && node.left) node = node.left;
@@ -114,7 +101,6 @@ export class AVLTree {
                 return node.left ? node.left : node.right;
             }
 
-            // Two children: replace with inorder successor
             const successor = this._findMin(node.right);
             node.data = { ...successor.data };
             const inner = { found: false };
@@ -129,15 +115,11 @@ export class AVLTree {
         if (!node) return null;
         return this._balance(node);
     }
-
-    // Returns true if removed, false if not found
     remove(label) {
         const result = { found: false };
         this.root = this._remove(this.root, label, result);
         return result.found;
     }
-
-    // --- Inorder traversal (sorted by x) ---
 
     _inorder(node, result) {
         if (!node) return;
@@ -152,8 +134,6 @@ export class AVLTree {
         return result;
     }
 
-    // --- 1D range search by x-coordinate ---
-
     _rangeSearch(node, xMin, xMax, result) {
         if (!node) return;
         if (node.data.x >= xMin) this._rangeSearch(node.left, xMin, xMax, result);
@@ -167,8 +147,6 @@ export class AVLTree {
         return result;
     }
 
-    // --- Find by label (full traversal — label is not the sort key) ---
-
     _findByLabel(node, label) {
         if (!node) return null;
         if (node.data.label === label) return node.data;
@@ -176,7 +154,6 @@ export class AVLTree {
                this._findByLabel(node.right, label);
     }
 
-    // Returns the Point if found, null otherwise
     findByLabel(label) {
         return this._findByLabel(this.root, label);
     }

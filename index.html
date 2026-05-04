@@ -234,14 +234,11 @@ html, body { width:100%; height:100%; overflow:hidden; background:var(--bg); col
 <script type="module">
 import { GISEngine } from './src/gisengine.js';
 
-// ─── Engine ───────────────────────────────────────────────────
 const engine = new GISEngine();
 
-// ─── Coordinate mapping  ──────────────────────────────────────
-// World: -1000..1000  →  lat/lng centred on Pune
-// 1000 world units ≈ 0.9 degrees ≈ ~100 km at this latitude
+
 const PUNE   = { lat: 18.5204, lng: 73.8567 };
-const SCALE  = 0.000045; // degrees per world unit — ±1000 ≈ 5 km, street-level accurate
+const SCALE  = 0.000045; 
 
 function w2ll(wx, wy) {
   return L.latLng(PUNE.lat + wy * SCALE, PUNE.lng + wx * SCALE);
@@ -249,10 +246,8 @@ function w2ll(wx, wy) {
 function ll2w(lat, lng) {
   return { x: (lng - PUNE.lng) / SCALE, y: (lat - PUNE.lat) / SCALE };
 }
-// World-unit radius → metres (for L.circle)
 function wRadToM(r) { return r * SCALE * 111320; }
 
-// ─── Leaflet map ──────────────────────────────────────────────
 const map = L.map('map', { center:[PUNE.lat, PUNE.lng], zoom:14, dragging:false });
 
 L.tileLayer('https://{s}.basemaps.cartocdn.com/light_all/{z}/{x}/{y}{r}.png', {
@@ -260,7 +255,6 @@ L.tileLayer('https://{s}.basemaps.cartocdn.com/light_all/{z}/{x}/{y}{r}.png', {
   subdomains:'abcd', maxZoom:19,
 }).addTo(map);
 
-// Right-click drag to pan
 const mapDiv = document.getElementById('map');
 let _rPanning = false, _rStart = null, _rCenter = null;
 mapDiv.addEventListener('mousedown', e => {
@@ -276,7 +270,6 @@ window.addEventListener('mousemove', e => {
   const dx  = e.clientX - _rStart.x;
   const dy  = e.clientY - _rStart.y;
   const res = map.getContainer().getBoundingClientRect();
-  // Convert pixel delta to lat/lng delta via current zoom
   const scale = Math.pow(2, map.getZoom());
   const dLng  = -dx / (256 * scale / 360);
   const dLat  =  dy / (256 * scale / (360 / Math.cos(_rCenter.lat * Math.PI / 180)));
@@ -291,37 +284,31 @@ window.addEventListener('mouseup', e => {
 });
 mapDiv.addEventListener('contextmenu', e => e.preventDefault());
 
-// ─── Layer groups ─────────────────────────────────────────────
-const ptLayer  = L.layerGroup().addTo(map);  // point markers
-const ovLayer  = L.layerGroup().addTo(map);  // query overlays
-const qtLayer  = L.layerGroup().addTo(map);  // quadtree rectangles
+const ptLayer  = L.layerGroup().addTo(map);  
+const ovLayer  = L.layerGroup().addTo(map); 
+const qtLayer  = L.layerGroup().addTo(map);  
 
-// ─── State ────────────────────────────────────────────────────
 let mode           = 'add';
 let showQT         = true;
 let highlightLabel = null;
 let queryResults   = [];
-let polyPoints     = [];        // Point objects being collected
-let distancePair   = [];        // labels
-const markerMap    = new Map(); // label → L.circleMarker
+let polyPoints     = [];       
+let distancePair   = [];        
+const markerMap    = new Map(); 
 
-// ─── Coord readout ────────────────────────────────────────────
 map.on('mousemove', e => {
   const w = ll2w(e.latlng.lat, e.latlng.lng);
   document.getElementById('coords').textContent =
     `x: ${w.x.toFixed(1)}   y: ${w.y.toFixed(1)}`;
 });
 
-// ─── Map click → depends on mode ─────────────────────────────
 map.on('click', e => {
   const w = ll2w(e.latlng.lat, e.latlng.lng);
   if      (mode === 'add')    openAddModal(w.x, w.y);
   else if (mode === 'radius') openRadiusModal(w.x, w.y);
   else if (mode === 'knn')    openKNNModal(w.x, w.y);
-  // remove / distance / polygon are handled via marker clicks
 });
 
-// ─── Marker factory ───────────────────────────────────────────
 function mkMarker(p, color = '#4f8ef7') {
   const ll = w2ll(p.x, p.y);
   const m = L.circleMarker(ll, {
@@ -333,7 +320,6 @@ function mkMarker(p, color = '#4f8ef7') {
   );
   m.on('click', ev => { L.DomEvent.stopPropagation(ev); onMarkerClick(p); });
 
-  // Permanent text label
   const lbl = L.marker(ll, {
     icon: L.divIcon({
       className: '',
@@ -344,9 +330,8 @@ function mkMarker(p, color = '#4f8ef7') {
     zIndexOffset: -1,
   });
 
-  // Group them so we can remove both together
   const grp = L.layerGroup([m, lbl]);
-  grp._circle = m; // expose for setStyle
+  grp._circle = m; 
   grp.setStyle = (s) => m.setStyle(s);
   grp.bindTooltip = (...a) => m.bindTooltip(...a);
   return grp;
@@ -384,7 +369,6 @@ function setColor(lbl, col)   { const m = markerMap.get(lbl); if (m) m.setStyle(
 function resetColors()        { for (const [,m] of markerMap) m.setStyle({ color:'#4f8ef7', fillColor:'#4f8ef7' }); }
 function highlightOne(lbl)    { resetColors(); if (lbl) setColor(lbl, '#ffffff'); }
 
-// ─── QuadTree rectangles ──────────────────────────────────────
 function redrawQT() {
   qtLayer.clearLayers();
   if (!showQT) return;
@@ -397,7 +381,6 @@ function redrawQT() {
   }
 }
 
-// ─── Overlays ─────────────────────────────────────────────────
 function clearOverlay() { ovLayer.clearLayers(); }
 
 function drawDistLine(p1, p2) {
@@ -429,7 +412,6 @@ function drawKNNOverlay(wx, wy, neighbors) {
   for (const n of neighbors) setColor(n.point.label, '#2ed87a');
 }
 
-// ─── Polygon ──────────────────────────────────────────────────
 let polyPreviewLine = null;
 
 function drawPolyPreview() {
@@ -447,12 +429,10 @@ function finishPolygon() {
   if (polyPreviewLine) { ovLayer.removeLayer(polyPreviewLine); polyPreviewLine = null; }
 
   if (r.ok) {
-    // Filled polygon
     L.polygon(r.vertices.map(p => w2ll(p.x, p.y)), {
       color:'#f5a623', weight:2, opacity:0.9, fillColor:'#f5a623', fillOpacity:0.15, interactive:false
     }).addTo(ovLayer);
 
-    // Area label at centroid
     const cx = r.vertices.reduce((s,p) => s+p.x, 0) / r.vertices.length;
     const cy = r.vertices.reduce((s,p) => s+p.y, 0) / r.vertices.length;
     L.marker(w2ll(cx, cy), {
@@ -480,7 +460,6 @@ function cancelPolygon() {
   document.getElementById('poly-hint').classList.remove('show');
 }
 
-// ─── Keyboard ─────────────────────────────────────────────────
 window.addEventListener('keydown', e => {
   if (mode === 'polygon') {
     if (e.key === 'Enter')  finishPolygon();
@@ -500,7 +479,6 @@ function clearQuery() {
   refreshList();
 }
 
-// ─── Mode buttons ─────────────────────────────────────────────
 document.querySelectorAll('[data-mode]').forEach(btn => {
   btn.addEventListener('click', () => {
     mode = btn.dataset.mode;
@@ -527,7 +505,6 @@ document.getElementById('btn-clear').addEventListener('click', () => {
   toast('Cleared all points','ok');
 });
 
-// ─── Modals ───────────────────────────────────────────────────
 let _px, _py;
 
 function openAddModal(wx, wy) {
@@ -633,7 +610,6 @@ document.getElementById('modal-overlay').addEventListener('click', e => {
   if (e.target === document.getElementById('modal-overlay')) closeModal();
 });
 
-// ─── Results panel ────────────────────────────────────────────
 function refreshList() {
   const all  = engine.getAllPointsSorted();
   const list = document.getElementById('results-list');
@@ -730,7 +706,6 @@ function rowClicks() {
   });
 }
 
-// ─── Search / Autocomplete ────────────────────────────────────
 const si = document.getElementById('search-input');
 const al = document.getElementById('autocomplete-list');
 
@@ -758,7 +733,6 @@ si.addEventListener('input', () => {
 });
 document.addEventListener('click', e => { if (!e.target.closest('#search-wrap')) al.classList.remove('open'); });
 
-// ─── Toast ────────────────────────────────────────────────────
 let _tt;
 function toast(msg, type='ok') {
   const t = document.getElementById('toast');
@@ -766,7 +740,6 @@ function toast(msg, type='ok') {
   clearTimeout(_tt); _tt = setTimeout(() => { t.className=''; }, 2500);
 }
 
-// ─── Init ─────────────────────────────────────────────────────
 const samples = [
   [100,200,'Alpha'],[-300,150,'Beta'],[200,-100,'Gamma'],[-150,-250,'Delta'],[50,50,'Epsilon']
 ];

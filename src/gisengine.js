@@ -1,7 +1,3 @@
-// GISEngine.js — translated from main.cpp (logic only, no UI)
-// Owns all data structure instances and exposes clean operations.
-// The frontend calls these methods; nothing here touches the DOM.
-
 import { Point }     from './point.js';
 import { Distance }  from './distance.js';
 import { AVLTree }   from './avltree.js';
@@ -27,10 +23,6 @@ export class GISEngine {
         this.quadTree = new QuadTree(new AABB(center, center, hw, hw), 4);
     }
 
-    // -------------------------------------------------------------------------
-    // Add a point
-    // Returns { ok: bool, message: string }
-    // -------------------------------------------------------------------------
     addPoint(x, y, label) {
         if (x < WORLD_MIN || x > WORLD_MAX || y < WORLD_MIN || y > WORLD_MAX) {
             return { ok: false, message: `Coordinates must be within [${WORLD_MIN}, ${WORLD_MAX}]` };
@@ -45,10 +37,6 @@ export class GISEngine {
         return { ok: true, message: `Point added: ${point.toString()}` };
     }
 
-    // -------------------------------------------------------------------------
-    // Remove a point by label
-    // Returns { ok: bool, message: string }
-    // -------------------------------------------------------------------------
     removePoint(label) {
         const removed = this.avlTree.remove(label);
 
@@ -59,7 +47,6 @@ export class GISEngine {
         this.trie.delete(label);
         this.suffixDAWG.delete(label);
 
-        // QuadTree has no delete — rebuild from remaining AVL points
         this._initQuadTree();
         for (const p of this.avlTree.inorder()) {
             this.quadTree.insert(p);
@@ -68,18 +55,10 @@ export class GISEngine {
         return { ok: true, message: `Point '${label}' removed` };
     }
 
-    // -------------------------------------------------------------------------
-    // Get all points sorted by X (AVL inorder)
-    // Returns array of Point
-    // -------------------------------------------------------------------------
     getAllPointsSorted() {
         return this.avlTree.inorder();
     }
 
-    // -------------------------------------------------------------------------
-    // Distance between two points by label
-    // Returns { ok, euclidean, manhattan, p1, p2, message }
-    // -------------------------------------------------------------------------
     getDistance(label1, label2) {
         const p1 = this.avlTree.findByLabel(label1);
         const p2 = this.avlTree.findByLabel(label2);
@@ -96,17 +75,12 @@ export class GISEngine {
         };
     }
 
-    // -------------------------------------------------------------------------
-    // Radius query — all points within radius of (cx, cy)
-    // Returns { ok, points, message }
-    // -------------------------------------------------------------------------
     queryRadius(cx, cy, radius) {
         if (radius <= 0) return { ok: false, message: 'Radius must be positive' };
 
         const center = new Point(cx, cy, 'QueryCenter');
         const points = this.quadTree.queryRadius(center, radius);
 
-        // Attach actual distances for display
         const withDist = points.map(p => ({
             point:    p,
             distance: Distance.euclidean(center, p),
@@ -116,10 +90,6 @@ export class GISEngine {
         return { ok: true, points: withDist };
     }
 
-    // -------------------------------------------------------------------------
-    // KNN — K nearest neighbors
-    // Returns { ok, neighbors, message }
-    // -------------------------------------------------------------------------
     queryKNN(qx, qy, k) {
         if (k <= 0) return { ok: false, message: 'K must be positive' };
 
@@ -142,10 +112,6 @@ export class GISEngine {
         return { ok: true, neighbors };
     }
 
-    // -------------------------------------------------------------------------
-    // Polygon area — Shoelace formula on an ordered list of labels
-    // Returns { ok, area, vertices, message }
-    // -------------------------------------------------------------------------
     calculateArea(labels) {
         if (labels.length < 3) {
             return { ok: false, message: 'Need at least 3 vertices' };
@@ -170,36 +136,25 @@ export class GISEngine {
         return { ok: true, area, vertices };
     }
 
-    // -------------------------------------------------------------------------
-    // Trie — find point by exact label
-    // Returns Point or null
-    // -------------------------------------------------------------------------
     searchLabel(label) {
         return this.trie.search(label);
     }
 
-    // -------------------------------------------------------------------------
-    // Unified search — prefix (Trie) + substring (SuffixDAWG) + fuzzy
-    // Returns array of { point, matchType } ranked: prefix > substring > fuzzy
-    // -------------------------------------------------------------------------
     search(query) {
         if (!query) return [];
 
-        const results = new Map(); // label → { point, rank }
+        const results = new Map();
 
-        // 1. Prefix match via Trie (rank 0 — best)
         for (const p of this.trie.autocomplete(query)) {
             results.set(p.label, { point: p, rank: 0 });
         }
 
-        // 2. Substring match via SuffixDAWG (rank 1)
         for (const p of this.suffixDAWG.substringSearch(query)) {
             if (!results.has(p.label)) {
                 results.set(p.label, { point: p, rank: 1 });
             }
         }
 
-        // 3. Fuzzy match, maxEdits=1 (rank 2+dist — lowest priority)
         for (const { point, dist } of this.suffixDAWG.fuzzySearch(query, 1)) {
             if (!results.has(point.label)) {
                 results.set(point.label, { point, rank: 2 + dist });
@@ -211,18 +166,11 @@ export class GISEngine {
             .map(e => e.point);
     }
 
-    // -------------------------------------------------------------------------
-    // Trie — autocomplete prefix (kept for backwards compat)
-    // -------------------------------------------------------------------------
     autocomplete(prefix) {
         if (!prefix) return [];
         return this.trie.autocomplete(prefix);
     }
 
-    // -------------------------------------------------------------------------
-    // QuadTree boundaries — for rendering partition lines
-    // Returns array of AABB
-    // -------------------------------------------------------------------------
     getQuadTreeBoundaries() {
         return this.quadTree.getBoundaries();
     }

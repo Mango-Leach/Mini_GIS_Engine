@@ -1,12 +1,8 @@
-// Trie.js — new addition (Unit 3)
-// Stores point labels character by character.
-// Supports: insert, exact search, prefix autocomplete, delete.
-
 class TrieNode {
     constructor() {
-        this.children  = {};  // char -> TrieNode
+        this.children  = {};  
         this.isEnd     = false;
-        this.pointData = null; // stores the Point when isEnd is true
+        this.pointData = null; 
     }
 }
 
@@ -15,7 +11,6 @@ export class Trie {
         this.root = new TrieNode();
     }
 
-    // Insert a label and associate it with a Point
     insert(label, point) {
         let node = this.root;
         for (const ch of label) {
@@ -28,7 +23,6 @@ export class Trie {
         node.pointData = point;
     }
 
-    // Exact search — returns the Point if label exists, null otherwise
     search(label) {
         let node = this.root;
         for (const ch of label) {
@@ -38,7 +32,6 @@ export class Trie {
         return node.isEnd ? node.pointData : null;
     }
 
-    // Prefix search — returns all Points whose label starts with prefix
     autocomplete(prefix) {
         let node = this.root;
         for (const ch of prefix) {
@@ -50,7 +43,6 @@ export class Trie {
         return results;
     }
 
-    // Collect all Points in the subtree rooted at node
     _collect(node, results) {
         if (node.isEnd) results.push(node.pointData);
         for (const ch of Object.keys(node.children)) {
@@ -58,7 +50,6 @@ export class Trie {
         }
     }
 
-    // Delete a label — returns true if removed, false if not found
     delete(label) {
         return this._delete(this.root, label, 0);
     }
@@ -78,7 +69,6 @@ export class Trie {
 
         const deleted = this._delete(node.children[ch], label, depth + 1);
 
-        // Clean up child node if it has no children and is not an end node
         if (deleted &&
             !node.children[ch].isEnd &&
             Object.keys(node.children[ch].children).length === 0) {

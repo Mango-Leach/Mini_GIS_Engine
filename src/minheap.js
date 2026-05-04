@@ -1,13 +1,7 @@
-// MinHeap.js — translated from MinHeap.h / MinHeap.cpp
-// Binary min-heap storing { distance, point } pairs ordered by distance.
-// Used for KNN: insert all candidates, extractMin K times.
-
 export class MinHeap {
     constructor() {
-        this.heap = []; // array of { distance, point }
+        this.heap = []; 
     }
-
-    // --- Index helpers ---
 
     _parent(i)     { return Math.floor((i - 1) / 2); }
     _leftChild(i)  { return 2 * i + 1; }
@@ -16,8 +10,6 @@ export class MinHeap {
     _swap(i, j) {
         [this.heap[i], this.heap[j]] = [this.heap[j], this.heap[i]];
     }
-
-    // --- Heapify ---
 
     _heapifyUp(index) {
         while (index > 0 &&
@@ -42,14 +34,11 @@ export class MinHeap {
         }
     }
 
-    // --- Public API ---
-
     insert(distance, point) {
         this.heap.push({ distance, point });
         this._heapifyUp(this.heap.length - 1);
     }
 
-    // Returns { distance, point } with minimum distance
     extractMin() {
         if (this.heap.length === 0) throw new Error('MinHeap is empty');
         const min = this.heap[0];
