@@ -6,6 +6,8 @@
 <title>GIS Engine</title>
 <link rel="preconnect" href="https://fonts.googleapis.com">
 <link href="https://fonts.googleapis.com/css2?family=JetBrains+Mono:wght@300;400;500;600&family=DM+Sans:wght@300;400;500&display=swap" rel="stylesheet">
+<link rel="stylesheet" href="https://unpkg.com/leaflet@1.9.4/dist/leaflet.css">
+<script src="https://unpkg.com/leaflet@1.9.4/dist/leaflet.js"></script>
 <style>
 *, *::before, *::after { box-sizing: border-box; margin: 0; padding: 0; }
 
@@ -29,426 +31,137 @@
   --panel-w:      260px;
 }
 
-html, body {
-  width: 100%; height: 100%;
-  overflow: hidden;
-  background: var(--bg);
-  color: var(--text-pri);
-  font-family: var(--sans);
-  font-size: 13px;
-}
+html, body { width:100%; height:100%; overflow:hidden; background:var(--bg); color:var(--text-pri); font-family:var(--sans); font-size:13px; }
 
-/* ── Layout ── */
-#app {
-  display: grid;
-  grid-template-columns: 1fr var(--panel-w);
-  width: 100vw; height: 100vh;
-}
+#app { display:grid; grid-template-columns:1fr var(--panel-w); width:100vw; height:100vh; }
 
-/* ── Canvas wrap ── */
-#canvas-wrap {
-  position: relative;
-  overflow: hidden;
-  background: var(--bg);
-}
+/* ── Map ── */
+#map-wrap { position:relative; overflow:hidden; }
+#map { width:100%; height:100%; background:#0b0d10; }
 
-canvas {
-  display: block;
-  width: 100%; height: 100%;
-}
-
-/* ── Coords readout ── */
+/* ── Coords ── */
 #coords {
-  position: absolute;
-  bottom: 16px; left: 16px;
-  font-family: var(--mono);
-  font-size: 10px;
-  color: var(--text-dim);
-  pointer-events: none;
-  letter-spacing: 0.05em;
+  position:absolute; bottom:16px; left:16px;
+  font-family:var(--mono); font-size:10px; color:#333;
+  pointer-events:none; letter-spacing:0.05em; z-index:500;
+  background:rgba(255,255,255,0.82); padding:4px 10px; border-radius:4px;
+  border:1px solid rgba(0,0,0,0.1);
 }
 
 /* ── Toast ── */
 #toast {
-  position: absolute;
-  bottom: 16px; left: 50%;
-  transform: translateX(-50%) translateY(10px);
-  background: var(--bg-panel);
-  border: 1px solid var(--border-light);
-  color: var(--text-pri);
-  font-family: var(--mono);
-  font-size: 11px;
-  padding: 7px 18px;
-  border-radius: 20px;
-  pointer-events: none;
-  opacity: 0;
-  transition: opacity 0.2s, transform 0.2s;
-  white-space: nowrap;
-  z-index: 50;
+  position:absolute; bottom:16px; left:50%;
+  transform:translateX(-50%) translateY(10px);
+  background:var(--bg-panel); border:1px solid var(--border-light);
+  color:var(--text-pri); font-family:var(--mono); font-size:11px;
+  padding:7px 18px; border-radius:20px; pointer-events:none;
+  opacity:0; transition:opacity 0.2s,transform 0.2s; white-space:nowrap; z-index:500;
 }
-#toast.show { opacity: 1; transform: translateX(-50%) translateY(0); }
-#toast.ok   { border-color: var(--green); color: var(--green); }
-#toast.err  { border-color: var(--red);   color: var(--red); }
+#toast.show { opacity:1; transform:translateX(-50%) translateY(0); }
+#toast.ok   { border-color:var(--green); color:var(--green); }
+#toast.err  { border-color:var(--red);   color:var(--red); }
 
-/* ── Polygon hint ── */
+/* ── Poly hint ── */
 #poly-hint {
-  position: absolute;
-  top: 16px; left: 50%;
-  transform: translateX(-50%);
-  background: var(--bg-panel);
-  border: 1px solid var(--border-light);
-  font-family: var(--mono);
-  font-size: 11px;
-  color: var(--text-sec);
-  padding: 6px 20px;
-  border-radius: 20px;
-  pointer-events: none;
-  opacity: 0;
-  transition: opacity 0.2s;
-  white-space: nowrap;
+  position:absolute; top:16px; left:50%; transform:translateX(-50%);
+  background:var(--bg-panel); border:1px solid var(--border-light);
+  font-family:var(--mono); font-size:11px; color:var(--text-sec);
+  padding:6px 20px; border-radius:20px; pointer-events:none;
+  opacity:0; transition:opacity 0.2s; white-space:nowrap; z-index:500;
 }
-#poly-hint.show { opacity: 1; }
-#poly-hint strong { color: var(--text-pri); }
+#poly-hint.show { opacity:1; }
+#poly-hint strong { color:var(--text-pri); }
 
-/* ── RIGHT PANEL ── */
-#panel {
-  display: flex;
-  flex-direction: column;
-  background: var(--bg-panel);
-  border-left: 1px solid var(--border);
-  overflow: hidden;
-}
+/* ── Panel ── */
+#panel { display:flex; flex-direction:column; background:var(--bg-panel); border-left:1px solid var(--border); overflow:hidden; z-index:600; }
 
-/* ── Header ── */
-#panel-header {
-  padding: 18px 16px 14px;
-  border-bottom: 1px solid var(--border);
-  flex-shrink: 0;
-}
+#panel-header { padding:18px 16px 14px; border-bottom:1px solid var(--border); flex-shrink:0; }
 
-#panel-title {
-  font-family: var(--mono);
-  font-size: 11px;
-  font-weight: 600;
-  letter-spacing: 0.12em;
-  text-transform: uppercase;
-  color: var(--accent);
-  margin-bottom: 12px;
-}
+#panel-title { font-family:var(--mono); font-size:11px; font-weight:600; letter-spacing:0.12em; text-transform:uppercase; color:var(--accent); margin-bottom:12px; }
 
 /* ── Search ── */
-#search-wrap {
-  position: relative;
-}
-
+#search-wrap { position:relative; }
 #search-input {
-  width: 100%;
-  background: var(--bg);
-  border: 1px solid var(--border-light);
-  border-radius: 6px;
-  color: var(--text-pri);
-  font-family: var(--mono);
-  font-size: 11px;
-  padding: 8px 10px 8px 34px;
-  outline: none;
-  transition: border-color 0.15s;
+  width:100%; background:var(--bg); border:1px solid var(--border-light);
+  border-radius:6px; color:var(--text-pri); font-family:var(--mono); font-size:11px;
+  padding:8px 10px 8px 34px; outline:none; transition:border-color 0.15s;
 }
-#search-input::placeholder { color: var(--text-dim); }
-#search-input:focus { border-color: var(--accent); }
-
-#search-icon {
-  position: absolute;
-  left: 10px; top: 50%;
-  transform: translateY(-50%);
-  color: var(--text-dim);
-  pointer-events: none;
-  font-size: 12px;
-}
-
-#autocomplete-list {
-  position: absolute;
-  top: calc(100% + 4px);
-  left: 0; right: 0;
-  background: var(--bg-panel);
-  border: 1px solid var(--border-light);
-  border-radius: 6px;
-  overflow: hidden;
-  z-index: 100;
-  display: none;
-}
-#autocomplete-list.open { display: block; }
-
-.ac-item {
-  padding: 8px 12px;
-  font-family: var(--mono);
-  font-size: 11px;
-  color: var(--text-sec);
-  cursor: pointer;
-  transition: background 0.1s;
-}
-.ac-item:hover { background: var(--bg-hover); color: var(--text-pri); }
-.ac-item .ac-match { color: var(--accent); }
+#search-input::placeholder { color:var(--text-dim); }
+#search-input:focus { border-color:var(--accent); }
+#search-icon { position:absolute; left:10px; top:50%; transform:translateY(-50%); color:var(--text-dim); pointer-events:none; font-size:12px; }
+#autocomplete-list { position:absolute; top:calc(100% + 4px); left:0; right:0; background:var(--bg-panel); border:1px solid var(--border-light); border-radius:6px; overflow:hidden; z-index:1000; display:none; }
+#autocomplete-list.open { display:block; }
+.ac-item { padding:8px 12px; font-family:var(--mono); font-size:11px; color:var(--text-sec); cursor:pointer; transition:background 0.1s; }
+.ac-item:hover { background:var(--bg-hover); color:var(--text-pri); }
+.ac-item .ac-match { color:var(--accent); }
 
 /* ── Toolbar ── */
-#toolbar {
-  padding: 14px 12px 8px;
-  display: flex;
-  flex-direction: column;
-  gap: 3px;
-  flex-shrink: 0;
-  border-bottom: 1px solid var(--border);
-}
-
-.section-label {
-  font-family: var(--mono);
-  font-size: 9px;
-  letter-spacing: 0.14em;
-  text-transform: uppercase;
-  color: var(--text-dim);
-  padding: 0 6px;
-  margin: 6px 0 4px;
-}
-.section-label:first-child { margin-top: 0; }
-
-.tool-btn {
-  display: flex;
-  align-items: center;
-  gap: 10px;
-  padding: 9px 10px;
-  border-radius: 6px;
-  border: 1px solid transparent;
-  background: transparent;
-  color: var(--text-sec);
-  font-family: var(--sans);
-  font-size: 12px;
-  cursor: pointer;
-  transition: all 0.12s;
-  text-align: left;
-  width: 100%;
-}
-.tool-btn:hover { background: var(--bg-hover); color: var(--text-pri); }
-.tool-btn.active {
-  background: var(--accent-dim);
-  border-color: rgba(79,142,247,0.25);
-  color: var(--accent);
-}
-
-.ds-tag {
-  margin-left: auto;
-  font-family: var(--mono);
-  font-size: 9px;
-  color: var(--text-dim);
-  white-space: nowrap;
-  flex-shrink: 0;
-}
-.tool-btn.active .ds-tag { color: rgba(79,142,247,0.5); }
-
-.tool-icon {
-  width: 20px; height: 20px;
-  display: flex; align-items: center; justify-content: center;
-  font-size: 14px;
-  flex-shrink: 0;
-}
+#toolbar { padding:14px 12px 8px; display:flex; flex-direction:column; gap:3px; flex-shrink:0; border-bottom:1px solid var(--border); }
+.section-label { font-family:var(--mono); font-size:9px; letter-spacing:0.14em; text-transform:uppercase; color:var(--text-dim); padding:0 6px; margin:6px 0 4px; }
+.section-label:first-child { margin-top:0; }
+.tool-btn { display:flex; align-items:center; gap:10px; padding:9px 10px; border-radius:6px; border:1px solid transparent; background:transparent; color:var(--text-sec); font-family:var(--sans); font-size:12px; cursor:pointer; transition:all 0.12s; text-align:left; width:100%; }
+.tool-btn:hover { background:var(--bg-hover); color:var(--text-pri); }
+.tool-btn.active { background:var(--accent-dim); border-color:rgba(79,142,247,0.25); color:var(--accent); }
+.ds-tag { margin-left:auto; font-family:var(--mono); font-size:9px; color:var(--text-dim); white-space:nowrap; flex-shrink:0; }
+.tool-btn.active .ds-tag { color:rgba(79,142,247,0.5); }
+.tool-icon { width:20px; height:20px; display:flex; align-items:center; justify-content:center; font-size:14px; flex-shrink:0; }
 
 /* ── Results ── */
-#results-wrap {
-  flex: 1;
-  display: flex;
-  flex-direction: column;
-  overflow: hidden;
-}
-
-#results-header {
-  display: flex;
-  align-items: center;
-  justify-content: space-between;
-  padding: 12px 16px 8px;
-  flex-shrink: 0;
-}
-
-#results-title {
-  font-family: var(--mono);
-  font-size: 9px;
-  letter-spacing: 0.14em;
-  text-transform: uppercase;
-  color: var(--text-dim);
-}
-
-#point-count {
-  font-family: var(--mono);
-  font-size: 9px;
-  color: var(--text-dim);
-  background: var(--bg);
-  padding: 2px 8px;
-  border-radius: 10px;
-  border: 1px solid var(--border);
-}
-
-#results-list {
-  flex: 1;
-  overflow-y: auto;
-  padding: 0 12px 14px;
-  scrollbar-width: thin;
-  scrollbar-color: var(--border) transparent;
-}
-
-.result-row {
-  display: flex;
-  align-items: center;
-  justify-content: space-between;
-  padding: 6px 8px;
-  border-radius: 5px;
-  cursor: pointer;
-  transition: background 0.1s;
-  gap: 8px;
-}
-.result-row:hover { background: var(--bg-hover); }
-.result-row.highlighted {
-  background: var(--accent-dim);
-  border-left: 2px solid var(--accent);
-  padding-left: 6px;
-}
-
-.result-label {
-  font-family: var(--mono);
-  font-size: 11px;
-  color: var(--text-pri);
-  white-space: nowrap;
-  overflow: hidden;
-  text-overflow: ellipsis;
-  max-width: 100px;
-}
-.result-coords {
-  font-family: var(--mono);
-  font-size: 10px;
-  color: var(--text-dim);
-  white-space: nowrap;
-  flex-shrink: 0;
-}
-
-.badge {
-  font-family: var(--mono);
-  font-size: 9px;
-  padding: 2px 6px;
-  border-radius: 3px;
-  flex-shrink: 0;
-  white-space: nowrap;
-}
-.badge-dist { background: rgba(79,142,247,0.15); color: var(--accent); }
-.badge-area { background: rgba(46,216,122,0.15); color: var(--green); }
-.badge-rank { background: rgba(245,166,35,0.15); color: var(--amber); }
-
-.result-empty {
-  font-family: var(--mono);
-  font-size: 11px;
-  color: var(--text-dim);
-  padding: 14px 8px;
-  font-style: italic;
-}
+#results-wrap { flex:1; display:flex; flex-direction:column; overflow:hidden; }
+#results-header { display:flex; align-items:center; justify-content:space-between; padding:12px 16px 8px; flex-shrink:0; }
+#results-title { font-family:var(--mono); font-size:9px; letter-spacing:0.14em; text-transform:uppercase; color:var(--text-dim); }
+#point-count { font-family:var(--mono); font-size:9px; color:var(--text-dim); background:var(--bg); padding:2px 8px; border-radius:10px; border:1px solid var(--border); }
+#results-list { flex:1; overflow-y:auto; padding:0 12px 14px; scrollbar-width:thin; scrollbar-color:var(--border) transparent; }
+.result-row { display:flex; align-items:center; justify-content:space-between; padding:6px 8px; border-radius:5px; cursor:pointer; transition:background 0.1s; gap:8px; }
+.result-row:hover { background:var(--bg-hover); }
+.result-row.highlighted { background:var(--accent-dim); border-left:2px solid var(--accent); padding-left:6px; }
+.result-label { font-family:var(--mono); font-size:11px; color:var(--text-pri); white-space:nowrap; overflow:hidden; text-overflow:ellipsis; max-width:100px; }
+.result-coords { font-family:var(--mono); font-size:10px; color:var(--text-dim); white-space:nowrap; flex-shrink:0; }
+.badge { font-family:var(--mono); font-size:9px; padding:2px 6px; border-radius:3px; flex-shrink:0; white-space:nowrap; }
+.badge-dist { background:rgba(79,142,247,0.15); color:var(--accent); }
+.badge-rank { background:rgba(245,166,35,0.15); color:var(--amber); }
+.result-empty { font-family:var(--mono); font-size:11px; color:var(--text-dim); padding:14px 8px; font-style:italic; }
 
 /* ── Modal ── */
-#modal-overlay {
-  position: fixed; inset: 0;
-  background: rgba(0,0,0,0.65);
-  display: flex;
-  align-items: center; justify-content: center;
-  z-index: 200;
-  opacity: 0; pointer-events: none;
-  transition: opacity 0.15s;
-}
-#modal-overlay.open { opacity: 1; pointer-events: all; }
+#modal-overlay { position:fixed; inset:0; background:rgba(0,0,0,0.65); display:flex; align-items:center; justify-content:center; z-index:1000; opacity:0; pointer-events:none; transition:opacity 0.15s; }
+#modal-overlay.open { opacity:1; pointer-events:all; }
+#modal { background:var(--bg-panel); border:1px solid var(--border-light); border-radius:10px; padding:24px; width:270px; transform:translateY(10px); transition:transform 0.15s; }
+#modal-overlay.open #modal { transform:translateY(0); }
+#modal h3 { font-family:var(--mono); font-size:12px; font-weight:600; color:var(--text-pri); margin-bottom:4px; }
+#modal p { font-size:11px; color:var(--text-sec); font-family:var(--mono); margin-bottom:14px; }
+.modal-coord { font-family:var(--mono); font-size:11px; color:var(--accent); background:var(--accent-dim); padding:6px 10px; border-radius:4px; margin-bottom:14px; }
+#modal input { width:100%; background:var(--bg); border:1px solid var(--border-light); border-radius:5px; color:var(--text-pri); font-family:var(--mono); font-size:12px; padding:8px 10px; outline:none; margin-bottom:10px; transition:border-color 0.15s; }
+#modal input:focus { border-color:var(--accent); }
+#modal input::placeholder { color:var(--text-dim); }
+.modal-label { font-family:var(--mono); font-size:10px; color:var(--text-sec); display:block; margin-bottom:4px; }
+.modal-row { display:flex; gap:8px; margin-top:4px; }
+.btn { flex:1; padding:9px; border-radius:5px; border:1px solid var(--border-light); font-family:var(--mono); font-size:11px; font-weight:500; cursor:pointer; transition:all 0.12s; }
+.btn-primary { background:var(--accent); border-color:var(--accent); color:#fff; }
+.btn-primary:hover { background:#6aa3f8; }
+.btn-ghost { background:transparent; color:var(--text-sec); }
+.btn-ghost:hover { background:var(--bg-hover); color:var(--text-pri); }
 
-#modal {
-  background: var(--bg-panel);
-  border: 1px solid var(--border-light);
-  border-radius: 10px;
-  padding: 24px;
-  width: 270px;
-  transform: translateY(10px);
-  transition: transform 0.15s;
-}
-#modal-overlay.open #modal { transform: translateY(0); }
+/* ── Leaflet overrides (light theme) ── */
+.leaflet-container { font-family:var(--mono); }
+.leaflet-control-zoom a { background:#fff !important; color:#444 !important; border-color:#ccc !important; }
+.leaflet-control-zoom a:hover { background:#f5f5f5 !important; color:#111 !important; }
+.leaflet-control-attribution { background:rgba(255,255,255,0.8) !important; color:#888 !important; font-size:9px !important; }
+.leaflet-control-attribution a { color:#888 !important; }
 
-#modal h3 {
-  font-family: var(--mono);
-  font-size: 12px;
-  font-weight: 600;
-  color: var(--text-pri);
-  margin-bottom: 4px;
-}
-#modal p {
-  font-size: 11px;
-  color: var(--text-sec);
-  font-family: var(--mono);
-  margin-bottom: 14px;
-}
-.modal-coord {
-  font-family: var(--mono);
-  font-size: 11px;
-  color: var(--accent);
-  background: var(--accent-dim);
-  padding: 6px 10px;
-  border-radius: 4px;
-  margin-bottom: 14px;
-}
-
-#modal input, #modal select {
-  width: 100%;
-  background: var(--bg);
-  border: 1px solid var(--border-light);
-  border-radius: 5px;
-  color: var(--text-pri);
-  font-family: var(--mono);
-  font-size: 12px;
-  padding: 8px 10px;
-  outline: none;
-  margin-bottom: 10px;
-  transition: border-color 0.15s;
-}
-#modal input:focus, #modal select:focus { border-color: var(--accent); }
-#modal input::placeholder { color: var(--text-dim); }
-
-.modal-label {
-  font-family: var(--mono);
-  font-size: 10px;
-  color: var(--text-sec);
-  display: block;
-  margin-bottom: 4px;
-}
-
-.modal-row { display: flex; gap: 8px; margin-top: 4px; }
-
-.btn {
-  flex: 1;
-  padding: 9px;
-  border-radius: 5px;
-  border: 1px solid var(--border-light);
-  font-family: var(--mono);
-  font-size: 11px;
-  font-weight: 500;
-  cursor: pointer;
-  transition: all 0.12s;
-}
-.btn-primary { background: var(--accent); border-color: var(--accent); color: #fff; }
-.btn-primary:hover { background: #6aa3f8; }
-.btn-ghost { background: transparent; color: var(--text-sec); }
-.btn-ghost:hover { background: var(--bg-hover); color: var(--text-pri); }
-.btn-danger { background: rgba(245,95,95,0.15); border-color: rgba(245,95,95,0.3); color: var(--red); }
-.btn-danger:hover { background: rgba(245,95,95,0.25); }
+/* Custom tooltip */
+.pt-tip { background:#fff; border:1px solid #ddd !important; border-radius:4px; color:#111; font-family:var(--mono); font-size:10px; padding:3px 8px; box-shadow:0 1px 4px rgba(0,0,0,0.15) !important; white-space:nowrap; }
+.pt-tip::before { display:none !important; }
 </style>
 </head>
 <body>
-
 <div id="app">
-  <!-- Canvas -->
-  <div id="canvas-wrap">
-    <canvas id="canvas"></canvas>
-    <div id="coords">x: 0.0   y: 0.0   zoom: 1.00×  ·  scroll to zoom  ·  right-drag to pan</div>
+  <div id="map-wrap">
+    <div id="map"></div>
+    <div id="coords">x: 0   y: 0</div>
     <div id="toast"></div>
     <div id="poly-hint">Click existing points to build polygon · <strong>Enter</strong> to finish · <strong>Esc</strong> to cancel</div>
   </div>
 
-  <!-- Right Panel -->
   <div id="panel">
     <div id="panel-header">
       <div id="panel-title">GIS Engine</div>
@@ -461,41 +174,38 @@ canvas {
 
     <div id="toolbar">
       <div class="section-label">Add / Edit</div>
-      <button class="tool-btn active" data-mode="add" title="Click canvas to add a point">
+      <button class="tool-btn active" data-mode="add">
         <span class="tool-icon">＋</span> Add Point
         <span class="ds-tag">AVL + QT + Trie</span>
       </button>
-      <button class="tool-btn" data-mode="remove" title="Click a point to remove it">
+      <button class="tool-btn" data-mode="remove">
         <span class="tool-icon">✕</span> Remove Point
         <span class="ds-tag">AVL + Trie</span>
       </button>
 
       <div class="section-label">Query</div>
-      <button class="tool-btn" data-mode="radius" title="Click canvas to set radius query center">
+      <button class="tool-btn" data-mode="radius">
         <span class="tool-icon">◎</span> Radius Query
         <span class="ds-tag">QuadTree</span>
       </button>
-      <button class="tool-btn" data-mode="knn" title="Click canvas for KNN">
+      <button class="tool-btn" data-mode="knn">
         <span class="tool-icon">⬡</span> K-Nearest (KNN)
         <span class="ds-tag">MinHeap</span>
       </button>
-      <button class="tool-btn" data-mode="distance" title="Click two points for distance">
+      <button class="tool-btn" data-mode="distance">
         <span class="tool-icon">↔</span> Distance
-        <span class="ds-tag">AVL lookup</span>
+        <span class="ds-tag">Euclidean</span>
       </button>
-      <button class="tool-btn" data-mode="polygon" title="Click points to form a polygon">
+      <button class="tool-btn" data-mode="polygon">
         <span class="tool-icon">⬟</span> Polygon Area
-        <span class="ds-tag">AVL lookup</span>
+        <span class="ds-tag">Shoelace</span>
       </button>
 
       <div class="section-label">View</div>
-      <button class="tool-btn active" id="btn-quadtree" title="Toggle QuadTree partitions">
+      <button class="tool-btn active" id="btn-quadtree">
         <span class="tool-icon">⊞</span> QuadTree Lines
       </button>
-      <button class="tool-btn" id="btn-reset-view" title="Reset pan and zoom">
-        <span class="tool-icon">⊙</span> Reset View
-      </button>
-      <button class="tool-btn" id="btn-clear" title="Clear all points">
+      <button class="tool-btn" id="btn-clear">
         <span class="tool-icon">⊘</span> Clear All
       </button>
     </div>
@@ -506,13 +216,12 @@ canvas {
         <span id="point-count">0 pts</span>
       </div>
       <div id="results-list">
-        <div class="result-empty">No points yet. Click the canvas to add one.</div>
+        <div class="result-empty">No points yet. Click the map to add one.</div>
       </div>
     </div>
   </div>
 </div>
 
-<!-- Add Point Modal -->
 <div id="modal-overlay">
   <div id="modal">
     <h3 id="modal-title">Add Point</h3>
@@ -528,604 +237,338 @@ import { GISEngine } from './src/gisengine.js';
 // ─── Engine ───────────────────────────────────────────────────
 const engine = new GISEngine();
 
-// ─── Canvas setup ─────────────────────────────────────────────
-const wrap   = document.getElementById('canvas-wrap');
-const canvas = document.getElementById('canvas');
-const ctx    = canvas.getContext('2d');
+// ─── Coordinate mapping  ──────────────────────────────────────
+// World: -1000..1000  →  lat/lng centred on Pune
+// 1000 world units ≈ 0.9 degrees ≈ ~100 km at this latitude
+const PUNE   = { lat: 18.5204, lng: 73.8567 };
+const SCALE  = 0.000045; // degrees per world unit — ±1000 ≈ 5 km, street-level accurate
 
-let W, H;
-const AXIS_COLOR = 'rgba(255,255,255,0.08)';
-const GRID_COLOR = 'rgba(255,255,255,0.03)';
-const POINT_R    = 5;
-const WORLD_RANGE = engine.worldMax - engine.worldMin; // 2000
-
-// ─── Viewport (pan + zoom) ────────────────────────────────────
-// panX/panY: world-space origin offset (what world coord is at screen center)
-let panX  = 0;   // world x at screen center
-let panY  = 0;   // world y at screen center
-let zoom  = 1.0; // multiplier on base scale
-const ZOOM_MIN = 0.2;
-const ZOOM_MAX = 20;
-
-function baseScale() {
-  // Uniform scale so world fits squarely in canvas with 40px padding each side
-  return Math.min(W, H) / WORLD_RANGE * 0.9;
+function w2ll(wx, wy) {
+  return L.latLng(PUNE.lat + wy * SCALE, PUNE.lng + wx * SCALE);
 }
-
-function toScreen(wx, wy) {
-  const s = baseScale() * zoom;
-  return {
-    x: W / 2 + (wx - panX) * s,
-    y: H / 2 - (wy - panY) * s,
-  };
+function ll2w(lat, lng) {
+  return { x: (lng - PUNE.lng) / SCALE, y: (lat - PUNE.lat) / SCALE };
 }
+// World-unit radius → metres (for L.circle)
+function wRadToM(r) { return r * SCALE * 111320; }
 
-function toWorld(sx, sy) {
-  const s = baseScale() * zoom;
-  return {
-    x: (sx - W / 2) / s + panX,
-    y: -((sy - H / 2) / s) + panY,
-  };
-}
+// ─── Leaflet map ──────────────────────────────────────────────
+const map = L.map('map', { center:[PUNE.lat, PUNE.lng], zoom:14, dragging:false });
 
-function resize() {
-  W = canvas.width  = wrap.clientWidth;
-  H = canvas.height = wrap.clientHeight;
-  render();
-}
-window.addEventListener('resize', resize);
+L.tileLayer('https://{s}.basemaps.cartocdn.com/light_all/{z}/{x}/{y}{r}.png', {
+  attribution:'© <a href="https://www.openstreetmap.org/copyright">OSM</a> © <a href="https://carto.com/">CARTO</a>',
+  subdomains:'abcd', maxZoom:19,
+}).addTo(map);
 
-// ─── Pan (middle-click drag or right-click drag) ───────────────
-let isPanning   = false;
-let panStartX   = 0;
-let panStartY   = 0;
-let panStartWX  = 0;
-let panStartWY  = 0;
-
-canvas.addEventListener('mousedown', e => {
-  // Middle button (1) or right button (2) → pan
-  if (e.button === 1 || e.button === 2) {
-    isPanning  = true;
-    panStartX  = e.clientX;
-    panStartY  = e.clientY;
-    panStartWX = panX;
-    panStartWY = panY;
-    canvas.style.cursor = 'grabbing';
-    e.preventDefault();
-  }
-});
-
-canvas.addEventListener('mousemove', e => {
-  if (isPanning) {
-    const s   = baseScale() * zoom;
-    const dx  = (e.clientX - panStartX) / s;
-    const dy  = (e.clientY - panStartY) / s;
-    panX = panStartWX - dx;
-    panY = panStartWY + dy;
-    render();
-  }
-});
-
-canvas.addEventListener('mouseup', e => {
-  if (e.button === 1 || e.button === 2) {
-    isPanning = false;
-    canvas.style.cursor = '';
-  }
-});
-
-canvas.addEventListener('contextmenu', e => e.preventDefault());
-
-// ─── Zoom (scroll wheel) ──────────────────────────────────────
-canvas.addEventListener('wheel', e => {
+// Right-click drag to pan
+const mapDiv = document.getElementById('map');
+let _rPanning = false, _rStart = null, _rCenter = null;
+mapDiv.addEventListener('mousedown', e => {
+  if (e.button !== 2) return;
   e.preventDefault();
-  const rect    = canvas.getBoundingClientRect();
-  const mx      = e.clientX - rect.left;
-  const my      = e.clientY - rect.top;
-  // World point under mouse before zoom
-  const before  = toWorld(mx, my);
-  const factor  = e.deltaY < 0 ? 1.15 : 1 / 1.15;
-  zoom = Math.max(ZOOM_MIN, Math.min(ZOOM_MAX, zoom * factor));
-  // Adjust pan so world point under mouse stays fixed
-  const after   = toWorld(mx, my);
-  panX += before.x - after.x;
-  panY += before.y - after.y;
-  render();
-}, { passive: false });
+  _rPanning = true;
+  _rStart   = { x: e.clientX, y: e.clientY };
+  _rCenter  = map.getCenter();
+  mapDiv.style.cursor = 'grabbing';
+});
+window.addEventListener('mousemove', e => {
+  if (!_rPanning) return;
+  const dx  = e.clientX - _rStart.x;
+  const dy  = e.clientY - _rStart.y;
+  const res = map.getContainer().getBoundingClientRect();
+  // Convert pixel delta to lat/lng delta via current zoom
+  const scale = Math.pow(2, map.getZoom());
+  const dLng  = -dx / (256 * scale / 360);
+  const dLat  =  dy / (256 * scale / (360 / Math.cos(_rCenter.lat * Math.PI / 180)));
+  map.setView([_rCenter.lat + dLat, _rCenter.lng + dLng], map.getZoom(), { animate:false });
+  _rStart  = { x: e.clientX, y: e.clientY };
+  _rCenter = map.getCenter();
+});
+window.addEventListener('mouseup', e => {
+  if (e.button !== 2) return;
+  _rPanning = false;
+  mapDiv.style.cursor = '';
+});
+mapDiv.addEventListener('contextmenu', e => e.preventDefault());
+
+// ─── Layer groups ─────────────────────────────────────────────
+const ptLayer  = L.layerGroup().addTo(map);  // point markers
+const ovLayer  = L.layerGroup().addTo(map);  // query overlays
+const qtLayer  = L.layerGroup().addTo(map);  // quadtree rectangles
 
 // ─── State ────────────────────────────────────────────────────
-let mode            = 'add';
-let highlightLabel  = null;
-let queryResults    = [];
-let radiusCircle    = null;
-let polyPoints      = [];
-let completedPolygon = [];
-let completedArea    = 0;
-let distancePair    = [];
-let distanceLine    = null;
-let knnCenter       = null;
+let mode           = 'add';
+let showQT         = true;
+let highlightLabel = null;
+let queryResults   = [];
+let polyPoints     = [];        // Point objects being collected
+let distancePair   = [];        // labels
+const markerMap    = new Map(); // label → L.circleMarker
 
-// ─── Render ───────────────────────────────────────────────────
-function render() {
-  ctx.clearRect(0, 0, W, H);
-  drawGrid();
-  if (showQuadTree) drawQuadTree();
-  drawQueryOverlay();
-  drawPolygonPreview();
-  drawPoints();
+// ─── Coord readout ────────────────────────────────────────────
+map.on('mousemove', e => {
+  const w = ll2w(e.latlng.lat, e.latlng.lng);
+  document.getElementById('coords').textContent =
+    `x: ${w.x.toFixed(1)}   y: ${w.y.toFixed(1)}`;
+});
+
+// ─── Map click → depends on mode ─────────────────────────────
+map.on('click', e => {
+  const w = ll2w(e.latlng.lat, e.latlng.lng);
+  if      (mode === 'add')    openAddModal(w.x, w.y);
+  else if (mode === 'radius') openRadiusModal(w.x, w.y);
+  else if (mode === 'knn')    openKNNModal(w.x, w.y);
+  // remove / distance / polygon are handled via marker clicks
+});
+
+// ─── Marker factory ───────────────────────────────────────────
+function mkMarker(p, color = '#4f8ef7') {
+  const ll = w2ll(p.x, p.y);
+  const m = L.circleMarker(ll, {
+    radius:6, color, fillColor:color, fillOpacity:0.9, weight:2,
+  });
+  m.bindTooltip(
+    `<b>${p.label}</b><br>x:${p.x.toFixed(0)} y:${p.y.toFixed(0)}`,
+    { className:'pt-tip', direction:'top', offset:[0,-8] }
+  );
+  m.on('click', ev => { L.DomEvent.stopPropagation(ev); onMarkerClick(p); });
+
+  // Permanent text label
+  const lbl = L.marker(ll, {
+    icon: L.divIcon({
+      className: '',
+      html: `<span style="font-family:'JetBrains Mono',monospace;font-size:11px;font-weight:500;color:#111;text-shadow:0 0 3px #fff,0 0 3px #fff,0 0 3px #fff;white-space:nowrap;pointer-events:none;">${p.label}</span>`,
+      iconAnchor: [-10, 6],
+    }),
+    interactive: false,
+    zIndexOffset: -1,
+  });
+
+  // Group them so we can remove both together
+  const grp = L.layerGroup([m, lbl]);
+  grp._circle = m; // expose for setStyle
+  grp.setStyle = (s) => m.setStyle(s);
+  grp.bindTooltip = (...a) => m.bindTooltip(...a);
+  return grp;
 }
 
-function drawGrid() {
-  const s = baseScale() * zoom;
+function onMarkerClick(p) {
+  if (mode === 'remove') {
+    const r = engine.removePoint(p.label);
+    if (r.ok) { toast(r.message,'ok'); dropMarker(p.label); redrawQT(); refreshList(); }
 
-  // Screen bounds in world space
-  const wLeft   = toWorld(0, 0).x;
-  const wRight  = toWorld(W, 0).x;
-  const wBottom = toWorld(0, H).y;
-  const wTop    = toWorld(0, 0).y;
-
-  // Adaptive grid step: pick a round number so there are ~10-15 lines visible
-  const worldSpan = wRight - wLeft;
-  const raw       = worldSpan / 12;
-  const magnitude = Math.pow(10, Math.floor(Math.log10(raw)));
-  const nice      = [1, 2, 5, 10].map(f => f * magnitude)
-                      .find(v => v >= raw) || magnitude * 10;
-  const step = nice;
-
-  // Minor grid lines
-  ctx.strokeStyle = GRID_COLOR;
-  ctx.lineWidth   = 1;
-  ctx.setLineDash([]);
-
-  const xStart = Math.floor(wLeft  / step) * step;
-  const xEnd   = Math.ceil(wRight  / step) * step;
-  const yStart = Math.floor(wBottom / step) * step;
-  const yEnd   = Math.ceil(wTop    / step) * step;
-
-  for (let v = xStart; v <= xEnd; v += step) {
-    const { x: sx } = toScreen(v, 0);
-    ctx.beginPath(); ctx.moveTo(sx, 0); ctx.lineTo(sx, H); ctx.stroke();
-  }
-  for (let v = yStart; v <= yEnd; v += step) {
-    const { y: sy } = toScreen(0, v);
-    ctx.beginPath(); ctx.moveTo(0, sy); ctx.lineTo(W, sy); ctx.stroke();
-  }
-
-  // Axes
-  ctx.strokeStyle = AXIS_COLOR;
-  ctx.lineWidth   = 1;
-  const { x: ax } = toScreen(0, 0);
-  const { y: ay } = toScreen(0, 0);
-
-  ctx.beginPath(); ctx.moveTo(ax, 0); ctx.lineTo(ax, H); ctx.stroke();
-  ctx.beginPath(); ctx.moveTo(0, ay); ctx.lineTo(W, ay); ctx.stroke();
-
-  // Axis arrow labels
-  ctx.fillStyle = 'rgba(255,255,255,0.2)';
-  ctx.font      = '11px JetBrains Mono, monospace';
-  ctx.textAlign = 'center';
-  if (ax > 10 && ax < W - 10) ctx.fillText('x', Math.min(ax + 16, W - 16), ay + 4);
-  if (ay > 10 && ay < H - 10) { ctx.textAlign = 'left'; ctx.fillText('y', ax + 6, Math.max(ay - 10, 14)); }
-
-  // Tick labels
-  ctx.fillStyle = 'rgba(255,255,255,0.22)';
-  ctx.font      = '9px JetBrains Mono, monospace';
-  for (let v = xStart; v <= xEnd; v += step) {
-    if (Math.abs(v) < step * 0.01) continue;
-    const { x: sx } = toScreen(v, 0);
-    const labelY = Math.max(14, Math.min(H - 6, ay + 14));
-    ctx.textAlign = 'center';
-    ctx.fillText(v, sx, labelY);
-  }
-  for (let v = yStart; v <= yEnd; v += step) {
-    if (Math.abs(v) < step * 0.01) continue;
-    const { y: sy } = toScreen(0, v);
-    const labelX = Math.max(30, Math.min(W - 6, ax - 6));
-    ctx.textAlign = 'right';
-    ctx.fillText(v, labelX, sy + 3);
-  }
-}
-
-function drawQuadTree() {
-  const boundaries = engine.getQuadTreeBoundaries();
-  ctx.strokeStyle = 'rgba(79,142,247,0.18)';
-  ctx.lineWidth   = 1;
-  ctx.setLineDash([3, 4]);
-  for (const bb of boundaries) {
-    const tl = toScreen(bb.cx - bb.halfWidth,  bb.cy + bb.halfHeight);
-    const br = toScreen(bb.cx + bb.halfWidth,  bb.cy - bb.halfHeight);
-    ctx.strokeRect(tl.x, tl.y, br.x - tl.x, br.y - tl.y);
-  }
-  ctx.setLineDash([]);
-}
-
-function drawQueryOverlay() {
-  // Radius circle
-  if (radiusCircle) {
-    const sc = toScreen(radiusCircle.cx, radiusCircle.cy);
-    const sr = radiusCircle.r * baseScale() * zoom;  // uniform world→screen scale
-
-    ctx.beginPath();
-    ctx.arc(sc.x, sc.y, sr, 0, Math.PI * 2);
-    ctx.strokeStyle = 'rgba(46,216,122,0.5)';
-    ctx.lineWidth   = 1.5;
-    ctx.setLineDash([5, 4]);
-    ctx.stroke();
-    ctx.fillStyle = 'rgba(46,216,122,0.06)';
-    ctx.fill();
-    ctx.setLineDash([]);
-
-    // Center dot
-    ctx.beginPath();
-    ctx.arc(sc.x, sc.y, 3, 0, Math.PI * 2);
-    ctx.fillStyle = 'rgba(46,216,122,0.8)';
-    ctx.fill();
-  }
-
-  // KNN center + spokes to each neighbor
-  if (knnCenter) {
-    const sc = toScreen(knnCenter.x, knnCenter.y);
-
-    // Spokes
-    ctx.strokeStyle = 'rgba(155,124,255,0.4)';
-    ctx.lineWidth   = 1;
-    ctx.setLineDash([4, 4]);
-    for (const r of queryResults) {
-      const p  = r.point;
-      const sp = toScreen(p.x, p.y);
-      ctx.beginPath();
-      ctx.moveTo(sc.x, sc.y);
-      ctx.lineTo(sp.x, sp.y);
-      ctx.stroke();
+  } else if (mode === 'distance') {
+    distancePair.push(p.label);
+    setColor(p.label, '#9b7cff');
+    if (distancePair.length === 2) {
+      const r = engine.getDistance(distancePair[0], distancePair[1]);
+      if (r.ok) { drawDistLine(r.p1, r.p2); showDistResults(r); }
+      distancePair = [];
+    } else {
+      toast('Now pick the second point', 'ok');
     }
-    ctx.setLineDash([]);
 
-    // Center dot (drawn on top of spokes)
-    ctx.beginPath();
-    ctx.arc(sc.x, sc.y, 5, 0, Math.PI * 2);
-    ctx.fillStyle = 'rgba(155,124,255,0.9)';
-    ctx.fill();
-  }
-
-  // Distance line
-  if (distanceLine) {
-    const s1 = toScreen(distanceLine.p1.x, distanceLine.p1.y);
-    const s2 = toScreen(distanceLine.p2.x, distanceLine.p2.y);
-    ctx.beginPath();
-    ctx.moveTo(s1.x, s1.y);
-    ctx.lineTo(s2.x, s2.y);
-    ctx.strokeStyle = 'rgba(79,142,247,0.7)';
-    ctx.lineWidth   = 1.5;
-    ctx.setLineDash([6, 4]);
-    ctx.stroke();
-    ctx.setLineDash([]);
+  } else if (mode === 'polygon') {
+    const last = polyPoints[polyPoints.length - 1];
+    if (last && last.label === p.label) return;
+    polyPoints.push(p);
+    setColor(p.label, '#f5a623');
+    toast(`${p.label} added (${polyPoints.length}) · Enter to finish`, 'ok');
+    drawPolyPreview();
   }
 }
 
-function drawPolygonPreview() {
-  // Completed (filled) polygon
-  if (completedPolygon.length >= 3) {
-    ctx.beginPath();
-    const f = toScreen(completedPolygon[0].x, completedPolygon[0].y);
-    ctx.moveTo(f.x, f.y);
-    for (let i = 1; i < completedPolygon.length; i++) {
-      const s = toScreen(completedPolygon[i].x, completedPolygon[i].y);
-      ctx.lineTo(s.x, s.y);
-    }
-    ctx.closePath();
-    ctx.fillStyle   = 'rgba(245,166,35,0.15)';
-    ctx.fill();
-    ctx.strokeStyle = 'rgba(245,166,35,0.8)';
-    ctx.lineWidth   = 1.5;
-    ctx.setLineDash([]);
-    ctx.stroke();
+function addMarker(p, color)  { const m = mkMarker(p, color); m.addTo(ptLayer); markerMap.set(p.label, m); }
+function dropMarker(lbl)      { const m = markerMap.get(lbl); if (m) { ptLayer.removeLayer(m); markerMap.delete(lbl); } }
+function setColor(lbl, col)   { const m = markerMap.get(lbl); if (m) m.setStyle({ color:col, fillColor:col }); }
+function resetColors()        { for (const [,m] of markerMap) m.setStyle({ color:'#4f8ef7', fillColor:'#4f8ef7' }); }
+function highlightOne(lbl)    { resetColors(); if (lbl) setColor(lbl, '#ffffff'); }
 
-    // Vertex dots
-    for (const p of completedPolygon) {
-      const s = toScreen(p.x, p.y);
-      ctx.beginPath();
-      ctx.arc(s.x, s.y, 5, 0, Math.PI * 2);
-      ctx.fillStyle = 'rgba(245,166,35,0.9)';
-      ctx.fill();
-    }
+// ─── QuadTree rectangles ──────────────────────────────────────
+function redrawQT() {
+  qtLayer.clearLayers();
+  if (!showQT) return;
+  for (const bb of engine.getQuadTreeBoundaries()) {
+    L.rectangle(
+      [w2ll(bb.cx - bb.halfWidth, bb.cy - bb.halfHeight),
+       w2ll(bb.cx + bb.halfWidth, bb.cy + bb.halfHeight)],
+      { color:'#4f8ef7', weight:1, opacity:0.2, fillOpacity:0, dashArray:'4 5', interactive:false }
+    ).addTo(qtLayer);
+  }
+}
+
+// ─── Overlays ─────────────────────────────────────────────────
+function clearOverlay() { ovLayer.clearLayers(); }
+
+function drawDistLine(p1, p2) {
+  clearOverlay();
+  L.polyline([w2ll(p1.x,p1.y), w2ll(p2.x,p2.y)],
+    { color:'#4f8ef7', weight:2, dashArray:'6 4', opacity:0.8, interactive:false }
+  ).addTo(ovLayer);
+}
+
+function drawRadiusOverlay(wx, wy, r, pts) {
+  clearOverlay();
+  const center = w2ll(wx, wy);
+  L.circle(center, { radius:wRadToM(r), color:'#2ed87a', weight:1.5, dashArray:'5 4', opacity:0.7, fillOpacity:0.06, interactive:false }).addTo(ovLayer);
+  L.circleMarker(center, { radius:4, color:'#2ed87a', fillColor:'#2ed87a', fillOpacity:1, weight:0, interactive:false }).addTo(ovLayer);
+  resetColors();
+  for (const e of pts) setColor(e.point.label, '#2ed87a');
+}
+
+function drawKNNOverlay(wx, wy, neighbors) {
+  clearOverlay();
+  const center = w2ll(wx, wy);
+  for (const n of neighbors) {
+    L.polyline([center, w2ll(n.point.x, n.point.y)],
+      { color:'#9b7cff', weight:1, dashArray:'4 4', opacity:0.6, interactive:false }
+    ).addTo(ovLayer);
+  }
+  L.circleMarker(center, { radius:6, color:'#9b7cff', fillColor:'#9b7cff', fillOpacity:0.9, weight:0, interactive:false }).addTo(ovLayer);
+  resetColors();
+  for (const n of neighbors) setColor(n.point.label, '#2ed87a');
+}
+
+// ─── Polygon ──────────────────────────────────────────────────
+let polyPreviewLine = null;
+
+function drawPolyPreview() {
+  if (polyPreviewLine) ovLayer.removeLayer(polyPreviewLine);
+  if (polyPoints.length < 2) return;
+  polyPreviewLine = L.polyline(
+    polyPoints.map(p => w2ll(p.x, p.y)),
+    { color:'#f5a623', weight:1.5, dashArray:'5 4', opacity:0.7, interactive:false }
+  ).addTo(ovLayer);
+}
+
+function finishPolygon() {
+  if (polyPoints.length < 3) { toast('Need at least 3 points','err'); return; }
+  const r = engine.calculateArea(polyPoints.map(p => p.label));
+  if (polyPreviewLine) { ovLayer.removeLayer(polyPreviewLine); polyPreviewLine = null; }
+
+  if (r.ok) {
+    // Filled polygon
+    L.polygon(r.vertices.map(p => w2ll(p.x, p.y)), {
+      color:'#f5a623', weight:2, opacity:0.9, fillColor:'#f5a623', fillOpacity:0.15, interactive:false
+    }).addTo(ovLayer);
 
     // Area label at centroid
-    const cx = completedPolygon.reduce((s, p) => s + p.x, 0) / completedPolygon.length;
-    const cy = completedPolygon.reduce((s, p) => s + p.y, 0) / completedPolygon.length;
-    const sc = toScreen(cx, cy);
-    ctx.font      = 'bold 13px JetBrains Mono, monospace';
-    ctx.fillStyle = 'rgba(245,166,35,0.95)';
-    ctx.textAlign = 'center';
-    ctx.fillText(`${completedArea.toFixed(1)} u²`, sc.x, sc.y);
-  }
+    const cx = r.vertices.reduce((s,p) => s+p.x, 0) / r.vertices.length;
+    const cy = r.vertices.reduce((s,p) => s+p.y, 0) / r.vertices.length;
+    L.marker(w2ll(cx, cy), {
+      icon: L.divIcon({
+        className:'',
+        html:`<div style="font-family:'JetBrains Mono',monospace;font-size:12px;font-weight:700;color:#f5a623;text-shadow:0 1px 4px #000;white-space:nowrap;">${r.area.toFixed(1)} u²</div>`,
+        iconAnchor:[0,0],
+      }), interactive:false,
+    }).addTo(ovLayer);
 
-  // In-progress polygon
-  if (polyPoints.length === 0) return;
-
-  ctx.strokeStyle = 'rgba(245,166,35,0.55)';
-  ctx.lineWidth   = 1.5;
-  ctx.setLineDash([5, 4]);
-  ctx.beginPath();
-  const first = toScreen(polyPoints[0].x, polyPoints[0].y);
-  ctx.moveTo(first.x, first.y);
-  for (let i = 1; i < polyPoints.length; i++) {
-    const s = toScreen(polyPoints[i].x, polyPoints[i].y);
-    ctx.lineTo(s.x, s.y);
+    showAreaResults(r);
+    toast(`Area: ${r.area.toFixed(2)} u²`, 'ok');
+  } else {
+    toast(r.message, 'err');
   }
-  ctx.stroke();
-  ctx.setLineDash([]);
-
-  // In-progress vertex dots
-  for (const p of polyPoints) {
-    const s = toScreen(p.x, p.y);
-    ctx.beginPath();
-    ctx.arc(s.x, s.y, 5, 0, Math.PI * 2);
-    ctx.fillStyle = 'rgba(245,166,35,0.7)';
-    ctx.fill();
-    // Ring on first vertex as "close here" indicator
-    if (p === polyPoints[0]) {
-      ctx.beginPath();
-      ctx.arc(s.x, s.y, 9, 0, Math.PI * 2);
-      ctx.strokeStyle = 'rgba(245,166,35,0.5)';
-      ctx.lineWidth = 1;
-      ctx.stroke();
-    }
-  }
+  for (const p of polyPoints) setColor(p.label, '#4f8ef7');
+  polyPoints = [];
+  document.getElementById('poly-hint').classList.remove('show');
 }
 
-function drawPoints() {
-  const all      = engine.getAllPointsSorted();
-  const hitSet   = new Set(queryResults.map(r => r.point ? r.point.label : r.label));
-  const distSet  = new Set(distancePair);
-
-  for (const p of all) {
-    const s         = toScreen(p.x, p.y);
-    const isHL      = p.label === highlightLabel;
-    const isQuery   = hitSet.has(p.label);
-    const isDist    = distSet.has(p.label);
-    const isDistPick = distancePair.length === 1 && distancePair[0] === p.label;
-
-    // Color selection
-    let color = '#4f8ef7';
-    if (isHL)       color = '#fff';
-    if (isQuery)    color = '#2ed87a';
-    if (isDist)     color = '#4f8ef7';
-    if (isDistPick) color = '#9b7cff';
-
-    const r = isHL ? 7 : 5;
-
-    // Glow
-    if (isHL || isQuery || isDist) {
-      ctx.beginPath();
-      ctx.arc(s.x, s.y, r + 5, 0, Math.PI * 2);
-      ctx.fillStyle = color.replace('#', 'rgba(').replace('2ed87a', '46,216,122,0.2)').replace('4f8ef7', '79,142,247,0.2)').replace('fff', '255,255,255,0.15)');
-      if (isQuery)  ctx.fillStyle = 'rgba(46,216,122,0.18)';
-      if (isHL)     ctx.fillStyle = 'rgba(255,255,255,0.12)';
-      if (isDist)   ctx.fillStyle = 'rgba(79,142,247,0.18)';
-      ctx.fill();
-    }
-
-    // Point circle
-    ctx.beginPath();
-    ctx.arc(s.x, s.y, r, 0, Math.PI * 2);
-    ctx.fillStyle = color;
-    ctx.fill();
-
-    // Label
-    ctx.fillStyle   = isHL ? '#fff' : 'rgba(232,234,240,0.75)';
-    ctx.font        = `${isHL ? '500 ' : ''}11px JetBrains Mono, monospace`;
-    ctx.textAlign   = 'left';
-    ctx.fillText(p.label, s.x + r + 5, s.y + 4);
-  }
-}
-
-// ─── Mouse ────────────────────────────────────────────────────
-canvas.addEventListener('mousemove', e => {
-  if (isPanning) return;
-  const rect = canvas.getBoundingClientRect();
-  const w    = toWorld(e.clientX - rect.left, e.clientY - rect.top);
-  document.getElementById('coords').textContent =
-    `x: ${w.x.toFixed(1).padStart(8)}   y: ${w.y.toFixed(1).padStart(8)}   zoom: ${zoom.toFixed(2)}×`;
-});
-
-canvas.addEventListener('click', e => {
-  if (isPanning) return;
-  const rect = canvas.getBoundingClientRect();
-  const { x: wx, y: wy } = toWorld(e.clientX - rect.left, e.clientY - rect.top);
-
-  if (mode === 'add') {
-    openAddModal(wx, wy);
-  } else if (mode === 'remove') {
-    const hit = pickPoint(e.clientX - rect.left, e.clientY - rect.top);
-    if (hit) {
-      const r = engine.removePoint(hit.label);
-      if (r.ok) {
-        toast(r.message, 'ok');
-        refreshList();
-        render();
-      }
-    }
-  } else if (mode === 'radius') {
-    openRadiusModal(wx, wy);
-  } else if (mode === 'knn') {
-    openKNNModal(wx, wy);
-  } else if (mode === 'distance') {
-    const hit = pickPoint(e.clientX - rect.left, e.clientY - rect.top);
-    if (hit) {
-      distancePair.push(hit.label);
-      if (distancePair.length === 2) {
-        const r = engine.getDistance(distancePair[0], distancePair[1]);
-        if (r.ok) {
-          distanceLine = { p1: r.p1, p2: r.p2 };
-          showDistanceResults(r);
-          render();
-        }
-        distancePair = [];
-      } else {
-        toast(`Pick second point for distance`, 'ok');
-        render();
-      }
-    }
-  } else if (mode === 'polygon') {
-    const hit = pickPoint(e.clientX - rect.left, e.clientY - rect.top, 18);
-    if (hit) {
-      const last = polyPoints[polyPoints.length - 1];
-      if (!last || last.label !== hit.label) {
-        polyPoints.push(hit);
-        toast(`${hit.label} added (${polyPoints.length} pts) · Enter to finish`, 'ok');
-      }
-    } else {
-      toast('Click an existing point to build the polygon', 'err');
-    }
-    render();
-  }
-});
-
-// Pick nearest point to screen coords
-function pickPoint(sx, sy, threshold = 14) {
-  const all = engine.getAllPointsSorted();
-  let best = null, bestD = Infinity;
-  for (const p of all) {
-    const s = toScreen(p.x, p.y);
-    const d = Math.hypot(s.x - sx, s.y - sy);
-    if (d < threshold && d < bestD) { best = p; bestD = d; }
-  }
-  return best;
+function cancelPolygon() {
+  if (polyPreviewLine) { ovLayer.removeLayer(polyPreviewLine); polyPreviewLine = null; }
+  for (const p of polyPoints) setColor(p.label, '#4f8ef7');
+  polyPoints = [];
+  document.getElementById('poly-hint').classList.remove('show');
 }
 
 // ─── Keyboard ─────────────────────────────────────────────────
 window.addEventListener('keydown', e => {
   if (mode === 'polygon') {
-    if (e.key === 'Enter') finishPolygon();
-    if (e.key === 'Escape') { polyPoints = []; completedPolygon = []; completedArea = 0; render(); hidePoly(); }
+    if (e.key === 'Enter')  finishPolygon();
+    if (e.key === 'Escape') cancelPolygon();
   }
-  if (e.key === 'Escape' && !document.getElementById('modal-overlay').classList.contains('open')) {
-    clearQuery();
-  }
+  if (e.key === 'Escape') clearQuery();
 });
 
-function finishPolygon() {
-  if (polyPoints.length < 3) { toast('Need at least 3 points', 'err'); return; }
-  const labels = polyPoints.map(p => p.label);
-  const r = engine.calculateArea(labels);
-  if (r.ok) {
-    // Keep the polygon drawn as a filled overlay
-    completedPolygon = polyPoints.slice();
-    completedArea    = r.area;
-    showAreaResults(r);
-    render();
-  } else {
-    toast(r.message, 'err');
-  }
-  polyPoints = [];
-  hidePoly();
+function clearQuery() {
+  clearOverlay();
+  cancelPolygon();
+  distancePair = [];
+  queryResults = [];
+  resetColors();
+  highlightLabel = null;
+  document.getElementById('results-title').textContent = 'Points';
+  refreshList();
 }
 
-function hidePoly() {
-  document.getElementById('poly-hint').classList.remove('show');
-  render();
-}
-
-// ─── Modes ────────────────────────────────────────────────────
+// ─── Mode buttons ─────────────────────────────────────────────
 document.querySelectorAll('[data-mode]').forEach(btn => {
   btn.addEventListener('click', () => {
     mode = btn.dataset.mode;
     document.querySelectorAll('[data-mode]').forEach(b => b.classList.remove('active'));
     btn.classList.add('active');
     clearQuery();
-    if (mode === 'polygon') {
-      document.getElementById('poly-hint').classList.add('show');
-    } else {
-      hidePoly();
-    }
-    canvas.style.cursor = {
-      add: 'crosshair', remove: 'not-allowed',
-      radius: 'cell', knn: 'cell',
-      distance: 'pointer', polygon: 'crosshair'
-    }[mode] || 'default';
+    if (mode === 'polygon') document.getElementById('poly-hint').classList.add('show');
+    document.getElementById('map').style.cursor =
+      ({add:'crosshair', remove:'not-allowed', radius:'cell', knn:'cell',
+        distance:'pointer', polygon:'crosshair'})[mode] || 'grab';
   });
 });
 
-let showQuadTree = true;
 document.getElementById('btn-quadtree').addEventListener('click', () => {
-  showQuadTree = !showQuadTree;
-  document.getElementById('btn-quadtree').classList.toggle('active', showQuadTree);
-  render();
-});
-
-document.getElementById('btn-reset-view').addEventListener('click', () => {
-  panX = 0; panY = 0; zoom = 1;
-  render();
+  showQT = !showQT;
+  document.getElementById('btn-quadtree').classList.toggle('active', showQT);
+  redrawQT();
 });
 
 document.getElementById('btn-clear').addEventListener('click', () => {
-  const all = engine.getAllPointsSorted();
-  for (const p of [...all]) engine.removePoint(p.label);
-  clearQuery();
-  refreshList();
-  render();
-  toast('Cleared all points', 'ok');
+  for (const p of [...engine.getAllPointsSorted()]) engine.removePoint(p.label);
+  ptLayer.clearLayers(); markerMap.clear();
+  clearOverlay(); redrawQT(); refreshList();
+  toast('Cleared all points','ok');
 });
 
-function clearQuery() {
-  queryResults     = [];
-  radiusCircle     = null;
-  knnCenter        = null;
-  distanceLine     = null;
-  distancePair     = [];
-  completedPolygon = [];
-  completedArea    = 0;
-  highlightLabel   = null;
-  refreshList();
-  render();
-}
-
-// ─── Modal ─────────────────────────────────────────────────────
-let _pendingX, _pendingY;
+// ─── Modals ───────────────────────────────────────────────────
+let _px, _py;
 
 function openAddModal(wx, wy) {
-  _pendingX = wx; _pendingY = wy;
+  _px = wx; _py = wy;
   document.getElementById('modal-title').textContent = 'Add Point';
   document.getElementById('modal-desc').textContent  = 'Enter a label for this point';
   document.getElementById('modal-coord').textContent = `clicked: (${wx.toFixed(1)}, ${wy.toFixed(1)})`;
   document.getElementById('modal-body').innerHTML = `
     <label class="modal-label">Label</label>
-    <input id="modal-label" type="text" placeholder="e.g. A, Station1…" maxlength="20">
-    <div class="modal-row" style="gap:8px; margin-bottom:10px;">
-      <div style="flex:1">
-        <label class="modal-label">X</label>
-        <input id="modal-x" type="number" step="any" value="${wx.toFixed(2)}" style="margin-bottom:0">
-      </div>
-      <div style="flex:1">
-        <label class="modal-label">Y</label>
-        <input id="modal-y" type="number" step="any" value="${wy.toFixed(2)}" style="margin-bottom:0">
-      </div>
+    <input id="ml" type="text" placeholder="e.g. A, Station1…" maxlength="20">
+    <div class="modal-row" style="gap:8px;margin-bottom:10px;">
+      <div style="flex:1"><label class="modal-label">X</label>
+        <input id="mx" type="number" step="any" value="${wx.toFixed(2)}" style="margin-bottom:0"></div>
+      <div style="flex:1"><label class="modal-label">Y</label>
+        <input id="my" type="number" step="any" value="${wy.toFixed(2)}" style="margin-bottom:0"></div>
     </div>
     <div class="modal-row">
-      <button class="btn btn-ghost" id="modal-cancel">Cancel</button>
-      <button class="btn btn-primary" id="modal-confirm">Add</button>
+      <button class="btn btn-ghost" id="mc">Cancel</button>
+      <button class="btn btn-primary" id="mok">Add</button>
     </div>`;
-
   openModal();
-  setTimeout(() => document.getElementById('modal-label')?.focus(), 50);
-
-  document.getElementById('modal-confirm').addEventListener('click', confirmAdd);
-  document.getElementById('modal-cancel').addEventListener('click', closeModal);
-  document.getElementById('modal-label').addEventListener('keydown', e => {
-    if (e.key === 'Enter') confirmAdd();
-    if (e.key === 'Escape') closeModal();
-  });
+  setTimeout(() => document.getElementById('ml')?.focus(), 50);
+  document.getElementById('mok').onclick = confirmAdd;
+  document.getElementById('mc').onclick  = closeModal;
+  document.getElementById('ml').onkeydown = e => { if(e.key==='Enter') confirmAdd(); if(e.key==='Escape') closeModal(); };
 }
 
 function confirmAdd() {
-  const label = document.getElementById('modal-label')?.value.trim();
-  const x     = parseFloat(document.getElementById('modal-x')?.value);
-  const y     = parseFloat(document.getElementById('modal-y')?.value);
-  if (!label)         { toast('Label cannot be empty', 'err'); return; }
-  if (isNaN(x) || isNaN(y)) { toast('X and Y must be numbers', 'err'); return; }
+  const label = document.getElementById('ml')?.value.trim();
+  const x     = parseFloat(document.getElementById('mx')?.value);
+  const y     = parseFloat(document.getElementById('my')?.value);
+  if (!label)           { toast('Label cannot be empty','err'); return; }
+  if (isNaN(x)||isNaN(y)){ toast('X and Y must be numbers','err'); return; }
   const r = engine.addPoint(x, y, label);
   closeModal();
   toast(r.message, r.ok ? 'ok' : 'err');
-  if (r.ok) { refreshList(); render(); }
+  if (r.ok) {
+    addMarker(engine.searchLabel(label));
+    redrawQT();
+    refreshList();
+  }
 }
 
 function openRadiusModal(wx, wy) {
@@ -1133,36 +576,27 @@ function openRadiusModal(wx, wy) {
   document.getElementById('modal-desc').textContent  = 'Find all points within radius';
   document.getElementById('modal-coord').textContent = `center: (${wx.toFixed(1)}, ${wy.toFixed(1)})`;
   document.getElementById('modal-body').innerHTML = `
-    <label class="modal-label">Radius</label>
-    <input id="modal-radius" type="number" placeholder="e.g. 200" min="1" max="2000" value="200">
+    <label class="modal-label">Radius (world units)</label>
+    <input id="mr" type="number" placeholder="e.g. 200" min="1" max="2000" value="200">
     <div class="modal-row">
-      <button class="btn btn-ghost" id="modal-cancel">Cancel</button>
-      <button class="btn btn-primary" id="modal-confirm">Query</button>
+      <button class="btn btn-ghost" id="mc">Cancel</button>
+      <button class="btn btn-primary" id="mok">Query</button>
     </div>`;
-
   openModal();
-  setTimeout(() => document.getElementById('modal-radius')?.focus(), 50);
-
+  setTimeout(() => document.getElementById('mr')?.focus(), 50);
   const go = () => {
-    const r = parseFloat(document.getElementById('modal-radius').value);
-    if (isNaN(r) || r <= 0) { toast('Enter a positive radius', 'err'); return; }
+    const r = parseFloat(document.getElementById('mr').value);
+    if (isNaN(r)||r<=0) { toast('Enter a positive radius','err'); return; }
     const res = engine.queryRadius(wx, wy, r);
     closeModal();
-    if (!res.ok) { toast(res.message, 'err'); return; }
-    radiusCircle   = { cx: wx, cy: wy, r };
-    queryResults   = res.points;
-    knnCenter      = null;
-    distanceLine   = null;
+    if (!res.ok) { toast(res.message,'err'); return; }
+    queryResults = res.points;
+    drawRadiusOverlay(wx, wy, r, res.points);
     showRadiusResults(res.points, r);
-    render();
   };
-
-  document.getElementById('modal-confirm').addEventListener('click', go);
-  document.getElementById('modal-cancel').addEventListener('click', closeModal);
-  document.getElementById('modal-radius').addEventListener('keydown', e => {
-    if (e.key === 'Enter') go();
-    if (e.key === 'Escape') closeModal();
-  });
+  document.getElementById('mok').onclick = go;
+  document.getElementById('mc').onclick  = closeModal;
+  document.getElementById('mr').onkeydown = e => { if(e.key==='Enter') go(); if(e.key==='Escape') closeModal(); };
 }
 
 function openKNNModal(wx, wy) {
@@ -1171,35 +605,26 @@ function openKNNModal(wx, wy) {
   document.getElementById('modal-coord').textContent = `query: (${wx.toFixed(1)}, ${wy.toFixed(1)})`;
   document.getElementById('modal-body').innerHTML = `
     <label class="modal-label">K (number of neighbors)</label>
-    <input id="modal-k" type="number" placeholder="e.g. 3" min="1" max="50" value="3">
+    <input id="mk" type="number" placeholder="e.g. 3" min="1" max="50" value="3">
     <div class="modal-row">
-      <button class="btn btn-ghost" id="modal-cancel">Cancel</button>
-      <button class="btn btn-primary" id="modal-confirm">Find</button>
+      <button class="btn btn-ghost" id="mc">Cancel</button>
+      <button class="btn btn-primary" id="mok">Find</button>
     </div>`;
-
   openModal();
-  setTimeout(() => document.getElementById('modal-k')?.focus(), 50);
-
+  setTimeout(() => document.getElementById('mk')?.focus(), 50);
   const go = () => {
-    const k = parseInt(document.getElementById('modal-k').value);
-    if (isNaN(k) || k <= 0) { toast('Enter a positive K', 'err'); return; }
+    const k = parseInt(document.getElementById('mk').value);
+    if (isNaN(k)||k<=0) { toast('Enter a positive K','err'); return; }
     const res = engine.queryKNN(wx, wy, k);
     closeModal();
-    if (!res.ok) { toast(res.message, 'err'); return; }
-    knnCenter    = { x: wx, y: wy };
-    radiusCircle = null;
-    queryResults = res.neighbors.map(n => ({ point: n.point, distance: n.distance }));
-    distanceLine = null;
+    if (!res.ok) { toast(res.message,'err'); return; }
+    queryResults = res.neighbors.map(n => ({ point:n.point, distance:n.distance }));
+    drawKNNOverlay(wx, wy, res.neighbors);
     showKNNResults(res.neighbors);
-    render();
   };
-
-  document.getElementById('modal-confirm').addEventListener('click', go);
-  document.getElementById('modal-cancel').addEventListener('click', closeModal);
-  document.getElementById('modal-k').addEventListener('keydown', e => {
-    if (e.key === 'Enter') go();
-    if (e.key === 'Escape') closeModal();
-  });
+  document.getElementById('mok').onclick = go;
+  document.getElementById('mc').onclick  = closeModal;
+  document.getElementById('mk').onkeydown = e => { if(e.key==='Enter') go(); if(e.key==='Escape') closeModal(); };
 }
 
 function openModal()  { document.getElementById('modal-overlay').classList.add('open'); }
@@ -1208,88 +633,63 @@ document.getElementById('modal-overlay').addEventListener('click', e => {
   if (e.target === document.getElementById('modal-overlay')) closeModal();
 });
 
-// ─── Results panel ─────────────────────────────────────────────
+// ─── Results panel ────────────────────────────────────────────
 function refreshList() {
-  const all   = engine.getAllPointsSorted();
-  const list  = document.getElementById('results-list');
-  const count = document.getElementById('point-count');
-
-  count.textContent = `${all.length} pt${all.length !== 1 ? 's' : ''}`;
-
+  const all  = engine.getAllPointsSorted();
+  const list = document.getElementById('results-list');
+  document.getElementById('results-title').textContent = 'Points';
+  document.getElementById('point-count').textContent = `${all.length} pt${all.length!==1?'s':''}`;
   if (all.length === 0) {
-    list.innerHTML = '<div class="result-empty">No points yet. Click the canvas to add one.</div>';
+    list.innerHTML = '<div class="result-empty">No points yet. Click the map to add one.</div>';
     return;
   }
-
   list.innerHTML = all.map(p => `
-    <div class="result-row ${highlightLabel === p.label ? 'highlighted' : ''}"
-         data-label="${p.label}">
+    <div class="result-row ${highlightLabel===p.label?'highlighted':''}" data-label="${p.label}">
       <span class="result-label">${p.label}</span>
       <span class="result-coords">${p.x.toFixed(0)}, ${p.y.toFixed(0)}</span>
     </div>`).join('');
-
   list.querySelectorAll('.result-row').forEach(row => {
     row.addEventListener('click', () => {
       const lbl = row.dataset.label;
-      highlightLabel = highlightLabel === lbl ? null : lbl;
+      highlightLabel = highlightLabel===lbl ? null : lbl;
+      highlightOne(highlightLabel);
       if (highlightLabel) {
         const p = engine.searchLabel(highlightLabel);
-        if (p) panTo(p);
+        if (p) map.panTo(w2ll(p.x, p.y));
       }
-      refreshList(); render();
+      refreshList();
     });
   });
 }
 
-function panTo(p) {
-  // Just re-render; no panning needed (world fits in view)
-  render();
-}
-
 function showRadiusResults(pts, r) {
-  const list  = document.getElementById('results-list');
-  const count = document.getElementById('point-count');
-  const title = document.getElementById('results-title');
-  title.textContent = `Radius (r=${r})`;
-  count.textContent = `${pts.length} found`;
-
-  if (pts.length === 0) {
-    list.innerHTML = '<div class="result-empty">No points in radius.</div>';
-    return;
-  }
-  list.innerHTML = pts.map((entry, i) => `
-    <div class="result-row" data-label="${entry.point.label}">
-      <span class="result-label">${entry.point.label}</span>
-      <span class="badge badge-dist">${entry.distance.toFixed(1)}</span>
+  document.getElementById('results-title').textContent = `Radius (r=${r})`;
+  document.getElementById('point-count').textContent = `${pts.length} found`;
+  const list = document.getElementById('results-list');
+  if (pts.length === 0) { list.innerHTML = '<div class="result-empty">No points in radius.</div>'; return; }
+  list.innerHTML = pts.map(e => `
+    <div class="result-row" data-label="${e.point.label}">
+      <span class="result-label">${e.point.label}</span>
+      <span class="badge badge-dist">${e.distance.toFixed(1)}</span>
     </div>`).join('');
-
-  attachRowClicks();
+  rowClicks();
 }
 
 function showKNNResults(neighbors) {
-  const list  = document.getElementById('results-list');
-  const count = document.getElementById('point-count');
-  const title = document.getElementById('results-title');
-  title.textContent = 'K-Nearest';
-  count.textContent = `${neighbors.length} found`;
-
-  list.innerHTML = neighbors.map((n, i) => `
+  document.getElementById('results-title').textContent = 'K-Nearest';
+  document.getElementById('point-count').textContent = `${neighbors.length} found`;
+  document.getElementById('results-list').innerHTML = neighbors.map((n,i) => `
     <div class="result-row" data-label="${n.point.label}">
       <span class="result-label">${n.point.label}</span>
       <span class="badge badge-rank">#${i+1} · ${n.distance.toFixed(1)}</span>
     </div>`).join('');
-
-  attachRowClicks();
+  rowClicks();
 }
 
-function showDistanceResults(r) {
-  const list  = document.getElementById('results-list');
-  const count = document.getElementById('point-count');
-  const title = document.getElementById('results-title');
-  title.textContent = 'Distance';
-  count.textContent = '2 pts';
-
-  list.innerHTML = `
+function showDistResults(r) {
+  document.getElementById('results-title').textContent = 'Distance';
+  document.getElementById('point-count').textContent = '2 pts';
+  document.getElementById('results-list').innerHTML = `
     <div class="result-row highlighted" data-label="${r.p1.label}">
       <span class="result-label">${r.p1.label}</span>
       <span class="result-coords">${r.p1.x.toFixed(0)}, ${r.p1.y.toFixed(0)}</span>
@@ -1298,102 +698,84 @@ function showDistanceResults(r) {
       <span class="result-label">${r.p2.label}</span>
       <span class="result-coords">${r.p2.x.toFixed(0)}, ${r.p2.y.toFixed(0)}</span>
     </div>
-    <div style="padding:10px 8px; font-family:var(--mono); font-size:11px;">
-      <div style="color:var(--text-sec); margin-bottom:6px;">
-        Euclidean: <span style="color:var(--accent)">${r.euclidean.toFixed(2)}</span>
-      </div>
-      <div style="color:var(--text-sec)">
-        Manhattan: <span style="color:var(--amber)">${r.manhattan.toFixed(2)}</span>
-      </div>
+    <div style="padding:10px 8px;font-family:var(--mono);font-size:11px;">
+      <div style="color:var(--text-sec);margin-bottom:6px;">Euclidean: <span style="color:var(--accent)">${r.euclidean.toFixed(2)}</span></div>
+      <div style="color:var(--text-sec);">Manhattan: <span style="color:var(--amber)">${r.manhattan.toFixed(2)}</span></div>
     </div>`;
-
-  attachRowClicks();
+  rowClicks();
 }
 
 function showAreaResults(r) {
-  const list  = document.getElementById('results-list');
-  const count = document.getElementById('point-count');
-  const title = document.getElementById('results-title');
-  title.textContent = 'Polygon Area';
-  count.textContent = `${r.vertices.length} verts`;
-
-  list.innerHTML = `
-    <div style="padding:10px 8px; font-family:var(--mono); font-size:11px; color:var(--text-sec);">
-      Area: <span style="color:var(--green); font-size:16px; font-weight:600;">${r.area.toFixed(2)}</span> units²
+  document.getElementById('results-title').textContent = 'Polygon Area';
+  document.getElementById('point-count').textContent = `${r.vertices.length} verts`;
+  document.getElementById('results-list').innerHTML = `
+    <div style="padding:10px 8px;font-family:var(--mono);font-size:11px;color:var(--text-sec);">
+      Area: <span style="color:var(--green);font-size:16px;font-weight:600;">${r.area.toFixed(2)}</span> units²
     </div>
-    ${r.vertices.map(p => `
+    ${r.vertices.map(p=>`
     <div class="result-row highlighted">
       <span class="result-label">${p.label}</span>
       <span class="result-coords">${p.x.toFixed(0)}, ${p.y.toFixed(0)}</span>
     </div>`).join('')}`;
 }
 
-function attachRowClicks() {
+function rowClicks() {
   document.querySelectorAll('.result-row[data-label]').forEach(row => {
     row.addEventListener('click', () => {
       const lbl = row.dataset.label;
-      highlightLabel = highlightLabel === lbl ? null : lbl;
-      render();
+      highlightLabel = highlightLabel===lbl ? null : lbl;
+      highlightOne(highlightLabel);
+      if (highlightLabel) { const p=engine.searchLabel(lbl); if(p) map.panTo(w2ll(p.x,p.y)); }
     });
   });
 }
 
-// ─── Search / Autocomplete ─────────────────────────────────────
-const searchInput = document.getElementById('search-input');
-const acList      = document.getElementById('autocomplete-list');
+// ─── Search / Autocomplete ────────────────────────────────────
+const si = document.getElementById('search-input');
+const al = document.getElementById('autocomplete-list');
 
-searchInput.addEventListener('input', () => {
-  const val = searchInput.value.trim();
-  if (!val) { acList.classList.remove('open'); highlightLabel = null; render(); return; }
-
-  const results = engine.autocomplete(val);
-  if (results.length === 0) { acList.classList.remove('open'); return; }
-
-  acList.innerHTML = results.slice(0, 8).map(p =>
-    `<div class="ac-item" data-label="${p.label}">
-       <span class="ac-match">${p.label.slice(0, val.length)}</span>${p.label.slice(val.length)}
-       <span style="color:var(--text-dim); float:right;">(${p.x.toFixed(0)}, ${p.y.toFixed(0)})</span>
-     </div>`).join('');
-
-  acList.classList.add('open');
-
-  acList.querySelectorAll('.ac-item').forEach(item => {
+si.addEventListener('input', () => {
+  const val = si.value.trim();
+  if (!val) { al.classList.remove('open'); highlightOne(null); return; }
+  const res = engine.search(val);
+  if (!res.length) { al.classList.remove('open'); return; }
+  al.innerHTML = res.slice(0,8).map(p =>
+  `<div class="ac-item" data-label="${p.label}">
+     ${p.label}
+     <span style="color:var(--text-dim);float:right;">(${p.x.toFixed(0)}, ${p.y.toFixed(0)})</span>
+   </div>`).join('');
+  al.classList.add('open');
+  al.querySelectorAll('.ac-item').forEach(item => {
     item.addEventListener('click', () => {
       const lbl = item.dataset.label;
-      searchInput.value = lbl;
-      highlightLabel    = lbl;
-      acList.classList.remove('open');
+      si.value = lbl; al.classList.remove('open');
+      highlightLabel = lbl; highlightOne(lbl);
+      const p = engine.searchLabel(lbl);
+      if (p) map.panTo(w2ll(p.x, p.y));
       refreshList();
-      render();
     });
   });
 });
-
-document.addEventListener('click', e => {
-  if (!e.target.closest('#search-wrap')) acList.classList.remove('open');
-});
+document.addEventListener('click', e => { if (!e.target.closest('#search-wrap')) al.classList.remove('open'); });
 
 // ─── Toast ────────────────────────────────────────────────────
-let _toastTimer;
-function toast(msg, type = 'ok') {
+let _tt;
+function toast(msg, type='ok') {
   const t = document.getElementById('toast');
-  t.textContent = msg;
-  t.className   = `show ${type}`;
-  clearTimeout(_toastTimer);
-  _toastTimer = setTimeout(() => { t.className = ''; }, 2500);
+  t.textContent = msg; t.className = `show ${type}`;
+  clearTimeout(_tt); _tt = setTimeout(() => { t.className=''; }, 2500);
 }
 
 // ─── Init ─────────────────────────────────────────────────────
-resize();
-
-// Add a few sample points
 const samples = [
-  [100, 200, 'Alpha'], [-300, 150, 'Beta'], [200, -100, 'Gamma'],
-  [-150, -250, 'Delta'], [50, 50, 'Epsilon']
+  [100,200,'Alpha'],[-300,150,'Beta'],[200,-100,'Gamma'],[-150,-250,'Delta'],[50,50,'Epsilon']
 ];
-for (const [x, y, l] of samples) engine.addPoint(x, y, l);
+for (const [x,y,l] of samples) {
+  engine.addPoint(x, y, l);
+  addMarker(engine.searchLabel(l));
+}
+redrawQT();
 refreshList();
-render();
 </script>
 </body>
 </html>

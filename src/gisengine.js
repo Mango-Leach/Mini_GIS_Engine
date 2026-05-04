@@ -7,15 +7,17 @@ import { Distance }  from './distance.js';
 import { AVLTree }   from './avltree.js';
 import { QuadTree, AABB } from './quadtree.js';
 import { MinHeap }   from './minheap.js';
-import { Trie }      from './trie.js';
+import { Trie }           from './trie.js';
+import { SuffixTrieDAWG } from './suffixtrie.js';
 
 const WORLD_MIN = -1000;
 const WORLD_MAX =  1000;
 
 export class GISEngine {
     constructor() {
-        this.avlTree  = new AVLTree();
-        this.trie     = new Trie();
+        this.avlTree    = new AVLTree();
+        this.trie       = new Trie();
+        this.suffixDAWG = new SuffixTrieDAWG();
         this._initQuadTree();
     }
 
@@ -38,6 +40,7 @@ export class GISEngine {
         this.quadTree.insert(point);
         this.avlTree.insert(point);
         this.trie.insert(label, point);
+        this.suffixDAWG.insert(label, point);
 
         return { ok: true, message: `Point added: ${point.toString()}` };
     }
@@ -54,6 +57,7 @@ export class GISEngine {
         }
 
         this.trie.delete(label);
+        this.suffixDAWG.delete(label);
 
         // QuadTree has no delete — rebuild from remaining AVL points
         this._initQuadTree();
@@ -175,8 +179,40 @@ export class GISEngine {
     }
 
     // -------------------------------------------------------------------------
-    // Trie — autocomplete prefix
-    // Returns array of Point
+    // Unified search — prefix (Trie) + substring (SuffixDAWG) + fuzzy
+    // Returns array of { point, matchType } ranked: prefix > substring > fuzzy
+    // -------------------------------------------------------------------------
+    search(query) {
+        if (!query) return [];
+
+        const results = new Map(); // label → { point, rank }
+
+        // 1. Prefix match via Trie (rank 0 — best)
+        for (const p of this.trie.autocomplete(query)) {
+            results.set(p.label, { point: p, rank: 0 });
+        }
+
+        // 2. Substring match via SuffixDAWG (rank 1)
+        for (const p of this.suffixDAWG.substringSearch(query)) {
+            if (!results.has(p.label)) {
+                results.set(p.label, { point: p, rank: 1 });
+            }
+        }
+
+        // 3. Fuzzy match, maxEdits=1 (rank 2+dist — lowest priority)
+        for (const { point, dist } of this.suffixDAWG.fuzzySearch(query, 1)) {
+            if (!results.has(point.label)) {
+                results.set(point.label, { point, rank: 2 + dist });
+            }
+        }
+
+        return [...results.values()]
+            .sort((a, b) => a.rank - b.rank)
+            .map(e => e.point);
+    }
+
+    // -------------------------------------------------------------------------
+    // Trie — autocomplete prefix (kept for backwards compat)
     // -------------------------------------------------------------------------
     autocomplete(prefix) {
         if (!prefix) return [];
